@@ -57,14 +57,19 @@ class Game:
         self,
         legacy: Legacy | None = None,
         legacy_path: str | None = None,
+        settings: Settings | None = None,
     ) -> None:
-        """Initialize settings, the Legacy, and the first run."""
+        """Initialize settings, the Legacy, and the first run.
+
+        ``settings`` comes from the main menu's Options screen when there is
+        one; tests and direct callers get the defaults.
+        """
         seed = os.environ.get("GAME_SEED")
         if seed is not None:
             # Optional hook so a whole playthrough can be made reproducible.
             random.seed(seed)
 
-        self.settings = Settings()
+        self.settings = settings if settings is not None else Settings()
         self.legacy = legacy if legacy is not None else Legacy()
         self.legacy_path = legacy_path
         self.running = True

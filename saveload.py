@@ -179,6 +179,55 @@ def load_legacy(path: str) -> Legacy:
     return loaded
 
 
+OPTIONS_PATH = os.path.join(SAVE_DIR, "options.sav")
+
+
+def save_options(settings: Settings, path: str = OPTIONS_PATH) -> str:
+    """Write the menu's Options screen to disk. Returns the path written."""
+    target = resolve_save_path(path)
+    _write_text(_obfuscate(json.dumps(asdict(settings), indent=2)), target)
+    return target
+
+
+def load_options(path: str = OPTIONS_PATH) -> Settings:
+    """Read saved Options, or return the defaults if there aren't usable ones.
+
+    Bad options are not worth refusing to start over: the game quietly falls
+    back to defaults rather than reporting an error at the title screen.
+    """
+    try:
+        data = json.loads(_read_text(resolve_save_path(path)))
+        return _from_dict(Settings, data, "options")
+    except (OSError, ValueError):
+        return Settings()
+
+
+def list_characters(directory: str = SAVE_DIR) -> list[tuple[str, Legacy, float]]:
+    """Every saved character as ``(path, legacy, last_played)``, newest first.
+
+    ``last_played`` is the save file's modification time, which is what makes
+    "Continue" mean the character you actually played last.
+    """
+    root = resolve_save_path(directory)
+    if not os.path.isdir(root):
+        return []
+
+    found = []
+    for entry in sorted(os.listdir(root)):
+        if not entry.endswith(".sav") or entry == os.path.basename(OPTIONS_PATH):
+            continue
+        path = os.path.join(directory, entry)
+        legacy = load_legacy(path)
+        # A file that will not parse comes back as a default Legacy. Skip those
+        # rather than offering a slot that has lost its name.
+        if not legacy.name or legacy.name == Legacy.name:
+            continue
+        found.append((path, legacy, os.path.getmtime(resolve_save_path(path))))
+
+    found.sort(key=lambda row: row[2], reverse=True)
+    return found
+
+
 def _serialize(game) -> dict:
     """Convert a game into a plain dictionary ready for JSON."""
     player = game.player

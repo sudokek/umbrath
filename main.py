@@ -1,22 +1,28 @@
 """Run the dark-fantasy RPG from the command line."""
 
-import newgame
+import menu
+import saveload
 from game import Game
 
 
 def main() -> None:
-    """Pick or create a character, then play them until they stop.
+    """Show the main menu, then play whichever character it hands back.
 
-    The character's name is their save slot: their Legacy -- relics, blessings,
+    A character's name is their save slot: their Legacy -- relics, blessings,
     echoes, and how many times they have died -- is written back to
     ``saves/<name>.sav`` every time a run ends.
     """
-    legacy = newgame.choose_character()
-    if legacy is None:
+    chosen = menu.run()
+    if chosen is None:
         print("Goodbye.")
         return
 
-    game = Game(legacy=legacy, legacy_path=newgame.legacy_path(legacy.name))
+    legacy, settings = chosen
+    game = Game(
+        legacy=legacy,
+        legacy_path=saveload.character_path(legacy.name),
+        settings=settings,
+    )
     game.run()
 
 

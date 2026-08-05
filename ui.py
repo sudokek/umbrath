@@ -53,6 +53,11 @@ def center(text: str) -> str:
     return text.center(WIDTH)
 
 
+def right(text: str) -> str:
+    """Right-align a short piece of text within the interface width."""
+    return text.rjust(WIDTH)
+
+
 def bar(label: str, value: int, maximum: int, slots: int = 10) -> str:
     """Return a simple ASCII meter like ``HP [#####-----]``."""
     filled = 0 if maximum <= 0 else round(slots * value / maximum)
