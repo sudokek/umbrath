@@ -4,14 +4,19 @@ The menu's decision-making is separated from its prompting, so everything here
 runs without feeding fake keystrokes to ``input()``.
 """
 
+import contextlib
+import io
 import os
 import tempfile
 import time
 import unittest
+import unittest.mock
 
+import chargen
 import menu
 import saveload
 from models import Legacy, Settings
+from ui import WIDTH, visible_len
 
 
 class MenuChoiceTests(unittest.TestCase):
@@ -73,6 +78,83 @@ class MenuDisplayTests(unittest.TestCase):
 
         for line in menu.menu_lines(True) + menu.menu_lines(False):
             self.assertLessEqual(len(line), WIDTH, line)
+
+
+class ScreenModelTests(unittest.TestCase):
+    """Every screen clears and draws once; notices survive to be read."""
+
+    def setUp(self):
+        menu.notify("")  # start from a clean slate
+
+    def _draw(self, *blocks) -> str:
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer):
+            menu.screen(*blocks)
+        return buffer.getvalue()
+
+    def test_a_screen_clears_before_drawing(self):
+        # Without this, each screen piles up under the last one.
+        with unittest.mock.patch("menu.clear_screen") as cleared:
+            self._draw("hello")
+        cleared.assert_called_once()
+
+    def test_a_notice_appears_on_the_next_screen(self):
+        menu.notify("watch out")
+        self.assertIn("watch out", self._draw("body"))
+
+    def test_a_notice_is_shown_only_once(self):
+        # Regression: messages used to be printed and then wiped by the next
+        # clear, so the player never saw them. Now they ride the next draw --
+        # but exactly one draw.
+        menu.notify("watch out")
+        self.assertIn("watch out", self._draw("body"))
+        self.assertNotIn("watch out", self._draw("body"))
+
+    def test_none_blocks_are_skipped(self):
+        text = self._draw("first", None, "second")
+        self.assertIn("first", text)
+        self.assertIn("second", text)
+
+    def test_screens_do_not_print_anything_else(self):
+        self.assertEqual(self._draw("only this").strip(), "only this")
+
+
+class ScreenFitTests(unittest.TestCase):
+    """Nothing may overflow the frame, sideways or downwards."""
+
+    TERMINAL_ROWS = 24
+
+    def test_the_origin_chooser_fits_a_standard_terminal(self):
+        # Regression: six origins at four lines each ran to 30 rows and pushed
+        # the question off the top of an 80x24 screen.
+        rows = len(chargen.listing()) + 3  # frame top, bottom, prompt
+        self.assertLessEqual(rows, self.TERMINAL_ROWS, f"{rows} rows")
+
+    def test_the_options_screen_fits_a_standard_terminal(self):
+        rows = len(menu.option_rows(Settings())) + 6
+        self.assertLessEqual(rows, self.TERMINAL_ROWS, f"{rows} rows")
+
+    def test_the_main_menu_fits_a_standard_terminal(self):
+        rows = len(menu.menu_lines(True)) + 8
+        self.assertLessEqual(rows, self.TERMINAL_ROWS, f"{rows} rows")
+
+    def test_no_chooser_line_is_wider_than_the_frame(self):
+        for line in chargen.listing():
+            self.assertLessEqual(visible_len(line), WIDTH, repr(line))
+
+    def test_truncation_never_exceeds_the_width_it_was_given(self):
+        # The ellipsis counts toward the budget; forgetting that was enough to
+        # break the frame by one column.
+        for width in range(4, 40):
+            for text in ("short", "a much longer piece of text than that", "x" * 80):
+                self.assertLessEqual(len(chargen._fit(text, width)), width)
+
+    def test_wrapped_prose_never_exceeds_the_frame(self):
+        from ui import wrap
+
+        for origin in chargen.ORIGINS.values():
+            for line in wrap(origin.blurb).splitlines():
+                self.assertLessEqual(visible_len(line), WIDTH, origin.name)
 
 
 class OptionsTests(unittest.TestCase):

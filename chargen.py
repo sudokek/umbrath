@@ -36,6 +36,9 @@ class Origin:
     key: str
     name: str
     blurb: str
+    # A short line for the chooser, where the full blurb will not fit. Falls
+    # back to the blurb so a new origin can omit it.
+    tagline: str = ""
     attack: int = 0
     max_hp: int = 0
     defense: int = 0
@@ -54,19 +57,28 @@ class Origin:
         return round(total, 3)
 
     def summary(self) -> str:
-        """One-line description of what this origin actually gives you."""
+        """One-line description of what this origin actually gives you.
+
+        Repeated items are counted rather than listed, so "3x vitae flask" does
+        not run off the edge of the frame as "vitae flask, vitae flask, ...".
+        """
         parts = []
         if self.attack:
-            parts.append(f"{self.attack:+d} damage")
+            parts.append(f"{self.attack:+d} dmg")
         if self.defense:
-            parts.append(f"{self.defense:+d} defense")
+            parts.append(f"{self.defense:+d} def")
         if self.max_hp:
-            parts.append(f"{self.max_hp:+d} max HP")
+            parts.append(f"{self.max_hp:+d} HP")
         if self.gold:
             parts.append(f"{self.gold:+d} coin")
-        if self.items:
-            parts.append("carrying " + ", ".join(self.items))
-        return "; ".join(parts) if parts else "nothing but your teeth"
+
+        counts: dict[str, int] = {}
+        for name in self.items:
+            counts[name] = counts.get(name, 0) + 1
+        for name, count in counts.items():
+            parts.append(f"{count}x {name}" if count > 1 else name)
+
+        return ", ".join(parts) if parts else "nothing but your teeth"
 
 
 # Six ways to have died. Each totals BUDGET points -- see the test that proves it.
@@ -75,6 +87,7 @@ ORIGINS: dict[str, Origin] = {
     for origin in [
         Origin(
             key="vaelric",
+            tagline="Old money, buried where the title cannot reach.",
             name="Vaelric Scion",
             blurb=(
                 "You were born to the house that owned this valley. The title is "
@@ -86,6 +99,7 @@ ORIGINS: dict[str, Origin] = {
         ),
         Origin(
             key="nachtkin",
+            tagline="Raised feral. Hard to kill, harder to be near.",
             name="Nachtkin",
             blurb=(
                 "You came up feral in the deep woods and were never taught to "
@@ -96,6 +110,7 @@ ORIGINS: dict[str, Origin] = {
         ),
         Origin(
             key="mourncaller",
+            tagline="Studied the grave long before it took you.",
             name="Mourncaller",
             blurb=(
                 "You studied the grave long before it took you. What answers when "
@@ -107,6 +122,7 @@ ORIGINS: dict[str, Origin] = {
         ),
         Origin(
             key="ironbound",
+            tagline="Died in armour and declined to take it off.",
             name="Ironbound",
             blurb=(
                 "You died in someone else's war, in someone else's armor, and "
@@ -118,6 +134,7 @@ ORIGINS: dict[str, Origin] = {
         ),
         Origin(
             key="thirstborn",
+            tagline="Turned last winter, and still starving.",
             name="Thirstborn",
             blurb=(
                 "Turned last winter, and still starving. Fast, vicious, and far "
@@ -130,6 +147,7 @@ ORIGINS: dict[str, Origin] = {
         ),
         Origin(
             key="graveborn",
+            tagline="Clawed up through your own grave-dirt.",
             name="Graveborn",
             blurb=(
                 "A commoner who clawed up through their own grave-dirt. No "
@@ -169,15 +187,39 @@ def get(key: str) -> Origin:
     return ORIGINS.get(key, UNBOUND)
 
 
-def listing() -> list[str]:
-    """The character-creation menu, one entry per origin."""
+def listing(width: int = 62) -> list[str]:
+    """The character-creation menu, two lines per origin.
+
+    Deliberately compact: six origins at four lines each overflowed a standard
+    24-row terminal and pushed the question off the top of the screen. Two lines
+    each keeps the whole choice visible at once, which is the only way to
+    actually compare them.
+    """
     lines = []
     for number, origin in enumerate(ORIGINS.values(), start=1):
-        lines.append(f"  {number}. {origin.name}")
-        lines.append(f"     {origin.blurb}")
-        lines.append(f"     Starts with: {origin.summary()}")
-        lines.append("")
+        head = f"  {number}. {origin.name:<13} "
+        lines.append(head + _fit(origin.summary(), width - len(head)))
+        lines.append(f"     {_fit(origin.tagline or origin.blurb, width - 5)}")
     return lines
+
+
+ELLIPSIS = "..."
+
+
+def _fit(text: str, width: int) -> str:
+    """Trim text to fit a column, breaking at a word and marking the cut.
+
+    The result is never wider than ``width`` -- the ellipsis is counted, which
+    it was not at first, and one column of overflow was enough to break the
+    frame it sits inside.
+    """
+    if len(text) <= width:
+        return text
+    room = max(0, width - len(ELLIPSIS))
+    clipped = text[:room]
+    if " " in clipped:
+        clipped = clipped.rsplit(" ", 1)[0]
+    return clipped.rstrip() + ELLIPSIS
 
 
 def by_number(choice: str) -> Origin | None:

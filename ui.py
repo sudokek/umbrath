@@ -292,6 +292,28 @@ def right(text: str) -> str:
     return " " * max(0, WIDTH - visible_len(text)) + text
 
 
+def wrap(text: str, indent: str = "  ") -> str:
+    """Fold prose to the interface width so it can never break a frame.
+
+    Plain text only -- wrapping would count colour escapes as characters, so
+    paint the result rather than the input.
+    """
+    words = text.split()
+    if not words:
+        return indent
+
+    lines, current = [], indent
+    for word in words:
+        candidate = word if current.strip() == "" else f"{current} {word}"
+        if len(candidate) > WIDTH and current.strip():
+            lines.append(current)
+            current = f"{indent}{word}"
+        else:
+            current = candidate if current.strip() else f"{indent}{word}"
+    lines.append(current)
+    return "\n".join(lines)
+
+
 def bar(label: str, value: int, maximum: int, slots: int = 10) -> str:
     """Return a simple ASCII meter like ``HP [#####-----]``.
 

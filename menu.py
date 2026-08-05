@@ -15,7 +15,18 @@ from dataclasses import fields, replace
 import chargen
 import saveload
 from models import Legacy, Settings
-from ui import center, clear_screen, paint, right, rule, set_color, set_unicode
+from ui import (
+    center,
+    clear_screen,
+    frame_bottom,
+    frame_top,
+    paint,
+    right,
+    rule,
+    set_color,
+    wrap,
+    set_unicode,
+)
 
 CREDIT = "created by sudokek"
 MAX_NAME = 24
@@ -122,28 +133,56 @@ def _ask(prompt: str = "> ") -> str:
         return ""
 
 
-def _title() -> None:
-    print(rule("="))
-    print(center(paint("UMBRATH", "bold", "bright_red")))
-    print(center(paint("a dominion is not given back; it is taken", "dim")))
-    print(rule("="))
+# Everything the menu wants to tell the player between screens. It is drawn as
+# part of the *next* screen rather than printed after the current one, which is
+# the same trick game.py plays with self.message: without it a message printed
+# at the bottom of a loop is wiped by the clear at the top of the next pass,
+# and the player never sees it.
+_notice = ""
 
 
-def _footer() -> None:
-    """The credit line. Shown, never offered as a choice."""
-    print()
-    print(right(paint(CREDIT, "dim")))
+def notify(text: str) -> None:
+    """Queue a line to appear on the next screen drawn."""
+    global _notice
+    _notice = text
+
+
+def screen(*blocks: str | None) -> None:
+    """Draw one whole screen: clear, print the blocks, then any pending notice.
+
+    Every menu screen goes through here, so no screen can accumulate under
+    another one and no message can be shown too briefly to read.
+    """
+    global _notice
+    clear_screen()
+    for block in blocks:
+        if block is not None:
+            print(block)
+    if _notice:
+        print()
+        print(paint(_notice, "bright_yellow"))
+        _notice = ""
+
+
+def _title_block() -> str:
+    """The banner, as one block of text."""
+    return "\n".join([
+        rule("="),
+        center(paint("UMBRATH", "bold", "bright_red")),
+        center(paint("a dominion is not given back; it is taken", "dim")),
+        rule("="),
+    ])
 
 
 def show_main_menu(has_saves: bool) -> None:
     """Draw the whole title screen, from the top of a cleared screen."""
-    clear_screen()
-    _title()
-    print()
-    for line in menu_lines(has_saves):
-        print(line)
-    _footer()
-    print()
+    screen(
+        _title_block(),
+        "",
+        "\n".join(menu_lines(has_saves)),
+        "",
+        right(paint(CREDIT, "dim")),
+    )
 
 
 # --------------------------------------------------------------------------
@@ -153,61 +192,99 @@ def show_main_menu(has_saves: bool) -> None:
 
 def choose_saved_character(characters) -> Legacy | None:
     """Pick from the saved characters. None to go back."""
-    clear_screen()
-    print(rule("-"))
-    print(paint("Your histories:", "bold"))
-    for number, (_path, legacy, _when) in enumerate(characters, start=1):
-        origin = chargen.get(legacy.origin)
-        print(
-            f"   {number}. {legacy.name} the {origin.name} "
-            f"-- {legacy.runs} run(s), {legacy.victories} victory(s), "
-            f"{legacy.echoes} echo(es)"
-        )
-    print("   b. Back")
-    print(rule("-"))
-
     while True:
+        rows = []
+        for number, (_path, legacy, _when) in enumerate(characters, start=1):
+            origin = chargen.get(legacy.origin)
+            rows.append(
+                f"   {paint(str(number), 'bright_cyan')}. "
+                f"{paint(legacy.name, 'bold')} the {origin.name} "
+                f"-- {legacy.runs} run(s), {legacy.victories} victory(s), "
+                f"{legacy.echoes} echo(es)"
+            )
+        rows.append("   b. Back")
+
+        screen(
+            frame_top("Your histories"),
+            "\n".join(rows),
+            frame_bottom(),
+        )
+
         choice = _ask()
         if not choice or choice.lower() in {"b", "back"}:
             return None
         if choice.isdigit() and 1 <= int(choice) <= len(characters):
             return characters[int(choice) - 1][1]
-        print("  No such history.")
+        notify("  No such history.")
 
 
-def create_character() -> Legacy | None:
-    """Ask for a name and an origin. None if the player backs out."""
-    clear_screen()
-    print(paint("What name will they curse?", "bold"))
-    name = _ask()[:MAX_NAME]
-    if not name:
-        return None
+def _ask_name() -> str | None:
+    """First screen of creation: the name. None if the player backs out."""
+    screen(
+        frame_top("A new history"),
+        "",
+        center(paint("What name will they curse?", "bold")),
+        "",
+        center(paint("(blank to go back)", "dim")),
+        "",
+        frame_bottom(),
+    )
+    return _ask()[:MAX_NAME] or None
 
-    print()
-    print(f"And what was {name}, before the blood?")
-    print()
-    for line in chargen.listing():
-        print(line)
 
-    origin = None
-    while origin is None:
+def _ask_origin(name: str):
+    """Second screen: the origin. None if the player backs out.
+
+    Redrawn whole on a bad answer, so the list is always on screen next to the
+    question rather than scrolled off above it.
+    """
+    while True:
+        screen(
+            frame_top(f"What was {name}, before the blood?"),
+            "\n".join(chargen.listing()),
+            frame_bottom(),
+        )
         choice = _ask("Choose a number> ")
         if not choice:
             return None
         origin = chargen.by_number(choice)
-        if origin is None:
-            print("  No such origin. Try the number beside it.")
+        if origin is not None:
+            return origin
+        notify("  No such origin. Pick one of the numbers above.")
+
+
+def _confirm_character(name: str, origin) -> None:
+    """Third screen: what they have become."""
+    screen(
+        frame_top("Risen"),
+        "",
+        center(paint(f"{name}, {origin.name}", "bold", "bright_red")),
+        "",
+        wrap(origin.blurb),
+        "",
+        wrap(f"You begin with: {origin.summary()}"),
+        "",
+        frame_bottom(),
+    )
+    _ask("Press Enter to rise.")
+
+
+def create_character() -> Legacy | None:
+    """Ask for a name and an origin. None if the player backs out.
+
+    Three screens rather than one: together they ran to thirty lines, which
+    scrolled the question off the top of a standard terminal.
+    """
+    name = _ask_name()
+    if not name:
+        return None
+
+    origin = _ask_origin(name)
+    if origin is None:
+        return None
 
     legacy = Legacy(name=name, origin=origin.key)
-
-    print()
-    print(rule("-"))
-    print(f"{name}, {origin.name}.")
-    print(f"  {origin.blurb}")
-    print(f"  You begin with: {origin.summary()}")
-    print(rule("-"))
-    print()
-    _ask("Press Enter to rise.")
+    _confirm_character(name, origin)
 
     # Write the slot straight away so Continue works before the first death.
     saveload.save_legacy(legacy, saveload.character_path(name))
@@ -224,15 +301,22 @@ def edit_options(settings: Settings) -> Settings:
     working = replace(settings)
 
     while True:
-        clear_screen()
-        print(rule("-"))
-        print(paint("Options", "bold"))
+        rows = []
         for number, (name, value) in enumerate(option_rows(working), start=1):
             # Wide enough for the longest setting name, so values stay aligned.
-            print(f"   {number:>2}. {name:<28} {value}")
-        print("    s. Save and go back")
-        print("    b. Back without saving")
-        print(rule("-"))
+            shown = paint("on", "bright_green") if value is True else (
+                paint("off", "dim") if value is False else paint(str(value), "bone")
+            )
+            rows.append(f"   {paint(f'{number:>2}', 'bright_cyan')}. {name:<28} {shown}")
+        rows.append("")
+        rows.append("    s. Save and go back")
+        rows.append("    b. Back without saving")
+
+        screen(
+            frame_top("Options"),
+            "\n".join(rows),
+            frame_bottom(),
+        )
 
         choice = _ask()
         if not choice or choice.lower() in {"b", "back"}:
@@ -241,12 +325,12 @@ def edit_options(settings: Settings) -> Settings:
             saveload.save_options(working)
             set_color(working.color)
             set_unicode(working.line_drawing)
-            print("  Saved.")
+            notify("  Saved.")
             return working
 
         rows = option_rows(working)
         if not (choice.isdigit() and 1 <= int(choice) <= len(rows)):
-            print("  No such option.")
+            notify("  No such option.")
             continue
 
         name, value = rows[int(choice) - 1]
@@ -262,10 +346,10 @@ def edit_options(settings: Settings) -> Settings:
             try:
                 new_value = int(raw)
             except ValueError:
-                print("  That is not a number.")
+                notify("  That is not a number.")
                 continue
             if name == "min_command_prefix" and not 1 <= new_value <= 10:
-                print("  min_command_prefix must be between 1 and 10.")
+                notify("  min_command_prefix must be between 1 and 10.")
                 continue
             setattr(working, name, new_value)
 
@@ -299,5 +383,4 @@ def run() -> tuple[Legacy, Settings] | None:
         elif key == "options":
             settings = edit_options(settings)
         elif key is None:
-            print(refusal(choice, bool(characters)))
-            _ask("  Press Enter to continue.")
+            notify(refusal(choice, bool(characters)))
