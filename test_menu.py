@@ -13,6 +13,7 @@ import unittest
 import unittest.mock
 
 import chargen
+import ui
 import menu
 import saveload
 from models import Legacy, Settings
@@ -155,6 +156,79 @@ class ScreenFitTests(unittest.TestCase):
         for origin in chargen.ORIGINS.values():
             for line in wrap(origin.blurb).splitlines():
                 self.assertLessEqual(visible_len(line), WIDTH, origin.name)
+
+
+class LoadScreenTests(unittest.TestCase):
+    """The one screen whose content is player-supplied, so it must be trimmed."""
+
+    def _legacy(self, name, origin="vaelric", runs=0, wins=0, echoes=0):
+        return Legacy(
+            name=name, origin=origin, runs=runs, victories=wins, echoes=echoes
+        )
+
+    def test_a_row_fits_the_frame_however_long_the_name(self):
+        # Regression: rows were built by raw concatenation, so a 19-character
+        # name rendered 84 columns wide inside a 62-wide frame and wrapped.
+        for name in ("Bob", "Alaric Vane", "Mordecai Blackthorn", "X" * menu.MAX_NAME):
+            row = menu.history_row(9, self._legacy(name, runs=999, wins=99, echoes=9999))
+            self.assertLessEqual(visible_len(row), WIDTH, f"{name!r} -> {row!r}")
+
+    def test_a_row_fits_for_every_origin(self):
+        for key in chargen.ORIGINS:
+            row = menu.history_row(1, self._legacy("X" * menu.MAX_NAME, key, 99, 9, 999))
+            self.assertLessEqual(visible_len(row), WIDTH, key)
+
+    def test_a_long_name_is_trimmed_rather_than_pushing_columns_out(self):
+        row = menu.history_row(1, self._legacy("X" * menu.MAX_NAME))
+        self.assertIn("...", row)
+        self.assertIn("Vaelric", row)  # the origin column survived
+
+    def test_the_list_is_capped_so_it_cannot_outgrow_the_terminal(self):
+        many = [(f"p{i}", self._legacy(f"Char {i}"), float(i)) for i in range(40)]
+        rows = 1 + min(len(many), menu.MAX_SLOTS_SHOWN) + 4  # header, slots, chrome
+        self.assertLessEqual(rows, ScreenFitTests.TERMINAL_ROWS, f"{rows} rows")
+
+
+class OptionsPreviewTests(unittest.TestCase):
+    """Toggling previews on the live display, so backing out must undo it."""
+
+    def setUp(self):
+        self._color = ui.color_enabled()
+        self._unicode = ui.unicode_enabled()
+        self._ansi, self._uni_ready = ui._ANSI_READY, ui._UNICODE_READY
+        ui._ANSI_READY = ui._UNICODE_READY = True
+        ui.set_color(True)
+        ui.set_unicode(True)
+        self.addCleanup(self._restore)
+
+    def _restore(self):
+        ui._ANSI_READY, ui._UNICODE_READY = self._ansi, self._uni_ready
+        ui.set_color(self._color)
+        ui.set_unicode(self._unicode)
+
+    def _run_options(self, *keystrokes):
+        answers = iter(keystrokes)
+        with unittest.mock.patch("builtins.input", lambda _="": next(answers, "")):
+            with contextlib.redirect_stdout(io.StringIO()):
+                return menu.edit_options(Settings())
+
+    def test_backing_out_restores_the_display(self):
+        # Regression: the toggle applied to the live display immediately, but
+        # Back returned the old settings without putting the display back, so
+        # the screen contradicted what Options reported.
+        returned = self._run_options("3", "b")  # toggle line_drawing, then back
+        self.assertTrue(returned.line_drawing)
+        self.assertTrue(ui.unicode_enabled(), "display kept the discarded value")
+
+    def test_backing_out_restores_colour_too(self):
+        returned = self._run_options("2", "b")  # toggle color, then back
+        self.assertTrue(returned.color)
+        self.assertTrue(ui.color_enabled(), "display kept the discarded value")
+
+    def test_saving_keeps_the_toggle(self):
+        returned = self._run_options("3", "s")
+        self.assertFalse(returned.line_drawing)
+        self.assertFalse(ui.unicode_enabled())
 
 
 class OptionsTests(unittest.TestCase):

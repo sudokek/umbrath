@@ -31,6 +31,15 @@ from ui import (
 CREDIT = "created by sudokek"
 MAX_NAME = 24
 
+# Column widths for the Load screen. Player-supplied names go here, so every
+# field is given a fixed column and trimmed to it rather than trusted to fit.
+NAME_COL = 20
+ORIGIN_COL = 13
+
+# How many save slots the Load screen shows at once. Bounded so a player with
+# thirty characters does not get a list taller than their terminal.
+MAX_SLOTS_SHOWN = 12
+
 # key, label, one-line description. Order is the order shown.
 ENTRIES = [
     ("new", "New Game", "Rise for the first time."),
@@ -190,18 +199,39 @@ def show_main_menu(has_saves: bool) -> None:
 # --------------------------------------------------------------------------
 
 
+def history_row(number: int, legacy: Legacy) -> str:
+    """One line of the Load screen, laid out in fixed columns.
+
+    Names are player-supplied and up to ``MAX_NAME`` long, so this is the one
+    menu screen whose content cannot be trusted to fit. Every field gets a
+    column and is trimmed to it: a long name pushes nothing else off the edge.
+    """
+    origin = chargen.get(legacy.origin)
+    name = chargen._fit(legacy.name, NAME_COL)
+    kind = chargen._fit(origin.name, ORIGIN_COL)
+    tally = f"{legacy.runs}/{legacy.victories}/{legacy.echoes}"
+    return (
+        f"   {paint(str(number), 'bright_cyan')}. "
+        f"{paint(f'{name:<{NAME_COL}}', 'bold')} "
+        f"{kind:<{ORIGIN_COL}} {tally}"
+    )
+
+
 def choose_saved_character(characters) -> Legacy | None:
     """Pick from the saved characters. None to go back."""
+    shown = characters[:MAX_SLOTS_SHOWN]
+
     while True:
-        rows = []
-        for number, (_path, legacy, _when) in enumerate(characters, start=1):
-            origin = chargen.get(legacy.origin)
-            rows.append(
-                f"   {paint(str(number), 'bright_cyan')}. "
-                f"{paint(legacy.name, 'bold')} the {origin.name} "
-                f"-- {legacy.runs} run(s), {legacy.victories} victory(s), "
-                f"{legacy.echoes} echo(es)"
-            )
+        rows = [paint(f"      {'name':<{NAME_COL}} {'origin':<{ORIGIN_COL}} "
+                      "runs/wins/echoes", "dim")]
+        for number, (_path, legacy, _when) in enumerate(shown, start=1):
+            rows.append(history_row(number, legacy))
+        if len(characters) > len(shown):
+            rows.append(paint(
+                f"      ...and {len(characters) - len(shown)} older, not shown.",
+                "dim",
+            ))
+        rows.append("")
         rows.append("   b. Back")
 
         screen(
@@ -213,8 +243,8 @@ def choose_saved_character(characters) -> Legacy | None:
         choice = _ask()
         if not choice or choice.lower() in {"b", "back"}:
             return None
-        if choice.isdigit() and 1 <= int(choice) <= len(characters):
-            return characters[int(choice) - 1][1]
+        if choice.isdigit() and 1 <= int(choice) <= len(shown):
+            return shown[int(choice) - 1][1]
         notify("  No such history.")
 
 
@@ -320,6 +350,10 @@ def edit_options(settings: Settings) -> Settings:
 
         choice = _ask()
         if not choice or choice.lower() in {"b", "back"}:
+            # Toggling previews on the live display, so backing out has to
+            # put the display back as well as discarding the value.
+            set_color(settings.color)
+            set_unicode(settings.line_drawing)
             return settings
         if choice.lower() in {"s", "save"}:
             saveload.save_options(working)
