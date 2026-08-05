@@ -21,7 +21,13 @@ def vault_of(game: Game, region: int):
 
 
 class WorldShapeTests(unittest.TestCase):
-    """Three regions, joined in order, with nothing stranded."""
+    """Three holds, joined in order, each fitted out as its own place.
+
+    Reachability, unique coordinates, and one-boss-per-hold used to be checked
+    here on a single seed. They live in test_invariants now, which asserts the
+    same properties across 120 generated worlds -- a strictly stronger claim,
+    so keeping the one-seed copies only cost time.
+    """
 
     def setUp(self):
         self.world = build_world(3)
@@ -29,28 +35,6 @@ class WorldShapeTests(unittest.TestCase):
     def test_every_region_exists(self):
         regions = {room.region for room in self.world.values()}
         self.assertEqual(regions, {spec["index"] for spec in REGIONS})
-
-    def test_whole_world_is_reachable_from_the_start(self):
-        seen, stack = {"square"}, ["square"]
-        while stack:
-            for target in self.world[stack.pop()].exits.values():
-                if target in self.world and target not in seen:
-                    seen.add(target)
-                    stack.append(target)
-        self.assertEqual(seen, set(self.world))
-
-    def test_no_two_rooms_share_a_coordinate(self):
-        spots = [(room.x, room.y) for room in self.world.values()]
-        self.assertEqual(len(spots), len(set(spots)))
-
-    def test_each_region_has_exactly_one_boss(self):
-        for spec in REGIONS:
-            bosses = [
-                room
-                for room in self.world.values()
-                if room.region == spec["index"] and any(e.boss for e in room.enemies)
-            ]
-            self.assertEqual(len(bosses), 1, spec["town"])
 
     def test_caves_use_their_own_theme(self):
         for spec in REGIONS:

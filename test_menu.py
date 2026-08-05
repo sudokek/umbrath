@@ -115,6 +115,66 @@ class ScreenModelTests(unittest.TestCase):
         self.assertEqual(self._draw("only this").strip(), "only this")
 
 
+class FrameBalanceTests(DisplayMixin, unittest.TestCase):
+    """Every framed screen opens and closes exactly once.
+
+    Nothing else catches this: a doubled or missing bottom edge renders wrong
+    but raises nothing, and the fit tests only measure width.
+    """
+
+    def setUp(self):
+        self.force_display()
+        menu.notify("")
+        # The clear sequence is not an SGR code, so it would otherwise ride on
+        # the first line and hide the top edge. This test is about frames.
+        patcher = unittest.mock.patch("menu.clear_screen")
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def _edges(self, text: str) -> tuple[int, int]:
+        """Count the top and bottom frame edges, ignoring colour escapes."""
+        from ui import ANSI, glyph
+
+        top, bottom = glyph("tl"), glyph("bl")
+        plain = [ANSI.sub("", line) for line in text.splitlines()]
+        return (
+            sum(line.startswith(top) for line in plain),
+            sum(line.startswith(bottom) for line in plain),
+        )
+
+    def test_panel_draws_one_top_and_one_bottom(self):
+        top, bottom = self._edges(capture(menu.panel, "Title", "body"))
+        self.assertEqual((top, bottom), (1, 1))
+
+    def test_panel_stays_balanced_with_many_blocks(self):
+        text = capture(menu.panel, "Title", "", "a", "", "b", "", "c", "")
+        self.assertEqual(self._edges(text), (1, 1))
+
+    def test_panel_keeps_blank_padding_blocks(self):
+        # The "" entries are load-bearing vertical spacing; screen() prints them
+        # and skips only None. Tidying them away would silently reflow a screen.
+        text = capture(menu.panel, "Title", "", "middle", "")
+        body = text.splitlines()
+        self.assertIn("", body[1:-1])
+
+    def test_every_framed_screen_is_balanced(self):
+        from models import Legacy
+
+        legacy = Legacy(name="Test", origin="graveborn")
+        screens = {
+            "histories": lambda: menu.panel(
+                "Your histories", menu.history_row(1, legacy)
+            ),
+            "origins": lambda: menu.panel("What was Test?", "\n".join(chargen.listing())),
+            "options": lambda: menu.panel(
+                "Options", "\n".join(f"{n}. x" for n in range(10))
+            ),
+        }
+        for name, draw in screens.items():
+            with self.subTest(screen=name):
+                self.assertEqual(self._edges(capture(draw)), (1, 1))
+
+
 class ScreenFitTests(unittest.TestCase):
     """Nothing may overflow the frame, sideways or downwards."""
 

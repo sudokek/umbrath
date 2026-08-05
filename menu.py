@@ -254,11 +254,7 @@ def choose_saved_character(characters) -> Legacy | None:
         rows.append("")
         rows.append("   b. Back")
 
-        screen(
-            frame_top("Your histories"),
-            "\n".join(rows),
-            frame_bottom(),
-        )
+        panel("Your histories", "\n".join(rows))
 
         choice = _ask()
         if wants_back(choice):
@@ -289,11 +285,7 @@ def _ask_origin(name: str):
     question rather than scrolled off above it.
     """
     while True:
-        screen(
-            frame_top(f"What was {name}, before the blood?"),
-            "\n".join(chargen.listing()),
-            frame_bottom(),
-        )
+        panel(f"What was {name}, before the blood?", "\n".join(chargen.listing()))
         choice = _ask("Choose a number> ")
         if not choice:
             return None
@@ -361,11 +353,7 @@ def edit_options(settings: Settings) -> Settings:
         rows.append("    s. Save and go back")
         rows.append("    b. Back without saving")
 
-        screen(
-            frame_top("Options"),
-            "\n".join(rows),
-            frame_bottom(),
-        )
+        panel("Options", "\n".join(rows))
 
         choice = _ask()
         if wants_back(choice):

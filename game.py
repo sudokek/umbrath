@@ -4,6 +4,11 @@ Every action method does one thing: change state and leave a line in
 ``self.message``. The loop in ``run`` is the only place that redraws, so no
 action has to remember to.
 
+One consequence is worth knowing before reading an action: :meth:`Game.pick`
+reports its own failure. An action that cannot find what the player named
+returns without saying anything itself, because ``pick`` has already left the
+reason in the message.
+
 A *run* is one attempt: one world, one Player, from Greyfen to whatever
 kills you. Dying ends the run and starts a new one -- but the
 :class:`~models.Legacy` survives, so every attempt begins a little stronger than
