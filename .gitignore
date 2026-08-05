@@ -1,0 +1,17 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+
+# Save files -- personal progress, not source
+savegame.sav
+savegame.json
+*.sav
+
+# Local tool state -- personal machine settings, not project config
+.claude/settings.local.json
+
+# Editor / OS noise
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
