@@ -36,7 +36,7 @@ from content import (
 from map_render import build_map
 from models import Item, Legacy, Room, Settings
 from parser import get_help_text, get_settings_help_text, match_target, parse_command
-from ui import bar, banner, center, clear_screen, rule
+from ui import bar, banner, center, clear_screen, paint, rule, set_color
 from world import build_world
 
 DEFAULT_SAVE_PATH = "savegame.sav"
@@ -70,6 +70,7 @@ class Game:
             random.seed(seed)
 
         self.settings = settings if settings is not None else Settings()
+        set_color(self.settings.color)
         self.legacy = legacy if legacy is not None else Legacy()
         self.legacy_path = legacy_path
         self.running = True
@@ -181,9 +182,9 @@ class Game:
 
         print(rule("="))
         print(center(
-            f"{player.name}   Lv {player.level}   "
+            f"{paint(player.name, 'bold')}   Lv {player.level}   "
             f"{bar('HP', player.hp, player.max_hp)} {player.hp}/{player.max_hp}   "
-            f"Gold {player.gold}"
+            f"Gold {paint(str(player.gold), 'yellow')}"
         ))
         print(center(
             f"Weapon: {weapon} (ATK {player.attack_power()})   "
@@ -203,11 +204,11 @@ class Game:
 
         print()
         print(rule("-"))
-        print(f"== {room.name} ==")
+        print(paint(f"== {room.name} ==", "bold", "bright_cyan"))
         print(room.description)
 
         if self.settings.show_room_items and room.items:
-            print("You see:", ", ".join(item.name for item in room.items))
+            print("You see:", paint(", ".join(i.name for i in room.items), "green"))
 
         if room.shrine:
             print("Blessings:", ", ".join(
@@ -217,7 +218,8 @@ class Game:
             print("For sale:", ", ".join(f"{i.name} ({i.price}g)" for i in room.shop))
 
         if room.trader:
-            print(f"* {room.trader.name} is here, packs open. (TALK, or BUY/SELL)")
+            print(paint(f"* {room.trader.name} is here, packs open. "
+                        "(TALK, or BUY/SELL)", "bright_magenta"))
 
         if room.inn:
             print(f"Rest here to fully heal for {REST_COST} gold.")
@@ -225,7 +227,8 @@ class Game:
         if room.enemies:
             enemy = room.enemies[0]
             marker = "###" if enemy.boss else "!!"
-            print(f"{marker} {enemy.name.upper()} -- {enemy.hp} HP {marker}")
+            style = ("bold", "bright_red") if enemy.boss else ("red",)
+            print(paint(f"{marker} {enemy.name.upper()} -- {enemy.hp} HP {marker}", *style))
 
         if self.settings.show_room_exits:
             print("Exits:", ", ".join(room.exits.keys()))

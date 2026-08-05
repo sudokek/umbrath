@@ -15,7 +15,7 @@ from dataclasses import fields, replace
 import chargen
 import saveload
 from models import Legacy, Settings
-from ui import WIDTH, center, right, rule
+from ui import center, clear_screen, paint, right, rule, set_color
 
 CREDIT = "created by sudokek"
 MAX_NAME = 24
@@ -41,48 +41,71 @@ def selectable(has_saves: bool) -> list[str]:
     ]
 
 
-def resolve(choice: str, has_saves: bool) -> str | None:
-    """Turn a keystroke into a menu key, or None if it means nothing.
+def resolve_any(choice: str) -> str | None:
+    """Which entry a keystroke names, ignoring whether it is available.
 
-    Accepts the entry number, the key, the label, or an unambiguous prefix --
-    the same courtesy the in-game command parser gives.
+    Kept separate from :func:`resolve` so the menu can tell "you picked
+    Continue but there is nothing to continue" apart from "that is not a menu
+    entry", and say something useful about each.
     """
     text = choice.strip().lower()
     if not text:
         return None
 
-    allowed = selectable(has_saves)
-
     if text.isdigit():
         index = int(text) - 1
-        if 0 <= index < len(ENTRIES):
-            key = ENTRIES[index][0]
-            return key if key in allowed else None
-        return None
+        return ENTRIES[index][0] if 0 <= index < len(ENTRIES) else None
 
     for key, label, _blurb in ENTRIES:
         if text in (key, label.lower()):
-            return key if key in allowed else None
+            return key
 
     matches = [
-        key for key, label, _blurb in ENTRIES
-        if label.lower().startswith(text) and key in allowed
+        key for key, label, _blurb in ENTRIES if label.lower().startswith(text)
     ]
     return matches[0] if len(matches) == 1 else None
 
 
+def resolve(choice: str, has_saves: bool) -> str | None:
+    """Turn a keystroke into a *selectable* menu key, or None.
+
+    Accepts the entry number, the key, the label, or an unambiguous prefix --
+    the same courtesy the in-game command parser gives.
+    """
+    key = resolve_any(choice)
+    return key if key in selectable(has_saves) else None
+
+
+def refusal(choice: str, has_saves: bool) -> str:
+    """Explain why a choice did nothing, rather than just repeating the menu."""
+    wanted = resolve_any(choice)
+    if wanted in NEEDS_SAVES and not has_saves:
+        label = next(lbl for key, lbl, _b in ENTRIES if key == wanted)
+        return (
+            f"  {label} needs a saved character, and you have none yet. "
+            "Pick New Game to make one."
+        )
+    return "  Choose one of the numbers above."
+
+
 def menu_lines(has_saves: bool) -> list[str]:
-    """The main menu as text, with unavailable entries marked rather than hidden.
+    """The main menu as text, with unavailable entries dimmed rather than hidden.
 
     Showing "Continue" greyed out on a first run explains the game's shape
     better than hiding it does.
     """
     lines = []
     for number, (key, label, blurb) in enumerate(ENTRIES, start=1):
-        if key in NEEDS_SAVES and not has_saves:
-            lines.append(f"   {number}. {label:<10} -- no saved characters yet")
+        locked = key in NEEDS_SAVES and not has_saves
+        if locked:
+            lines.append(
+                paint(f"   {number}. {label:<10} -- no saved characters yet", "dim")
+            )
         else:
-            lines.append(f"   {number}. {label:<10} -- {blurb}")
+            lines.append(
+                f"   {paint(str(number), 'bright_cyan')}. "
+                f"{paint(f'{label:<10}', 'bold')} -- {blurb}"
+            )
     return lines
 
 
@@ -101,20 +124,20 @@ def _ask(prompt: str = "> ") -> str:
 
 def _title() -> None:
     print(rule("="))
-    print(center("UMBRATH"))
-    print(center("a dominion is not given back; it is taken"))
+    print(center(paint("UMBRATH", "bold", "bright_red")))
+    print(center(paint("a dominion is not given back; it is taken", "dim")))
     print(rule("="))
 
 
 def _footer() -> None:
     """The credit line. Shown, never offered as a choice."""
     print()
-    print(right(CREDIT))
+    print(right(paint(CREDIT, "dim")))
 
 
 def show_main_menu(has_saves: bool) -> None:
-    """Draw the whole title screen."""
-    print()
+    """Draw the whole title screen, from the top of a cleared screen."""
+    clear_screen()
     _title()
     print()
     for line in menu_lines(has_saves):
@@ -130,9 +153,9 @@ def show_main_menu(has_saves: bool) -> None:
 
 def choose_saved_character(characters) -> Legacy | None:
     """Pick from the saved characters. None to go back."""
-    print()
+    clear_screen()
     print(rule("-"))
-    print("Your histories:")
+    print(paint("Your histories:", "bold"))
     for number, (_path, legacy, _when) in enumerate(characters, start=1):
         origin = chargen.get(legacy.origin)
         print(
@@ -154,8 +177,8 @@ def choose_saved_character(characters) -> Legacy | None:
 
 def create_character() -> Legacy | None:
     """Ask for a name and an origin. None if the player backs out."""
-    print()
-    print("What name will they curse?")
+    clear_screen()
+    print(paint("What name will they curse?", "bold"))
     name = _ask()[:MAX_NAME]
     if not name:
         return None
@@ -201,9 +224,9 @@ def edit_options(settings: Settings) -> Settings:
     working = replace(settings)
 
     while True:
-        print()
+        clear_screen()
         print(rule("-"))
-        print("Options")
+        print(paint("Options", "bold"))
         for number, (name, value) in enumerate(option_rows(working), start=1):
             # Wide enough for the longest setting name, so values stay aligned.
             print(f"   {number:>2}. {name:<28} {value}")
@@ -216,6 +239,7 @@ def edit_options(settings: Settings) -> Settings:
             return settings
         if choice.lower() in {"s", "save"}:
             saveload.save_options(working)
+            set_color(working.color)
             print("  Saved.")
             return working
 
@@ -227,6 +251,9 @@ def edit_options(settings: Settings) -> Settings:
         name, value = rows[int(choice) - 1]
         if isinstance(value, bool):
             setattr(working, name, not value)
+            if name == "color":
+                # Apply at once so the screen shows what it will look like.
+                set_color(working.color)
         else:
             raw = _ask(f"  New value for {name}> ")
             try:
@@ -243,12 +270,14 @@ def edit_options(settings: Settings) -> Settings:
 def run() -> tuple[Legacy, Settings] | None:
     """Drive the title screen. Returns the character and settings to play, or None."""
     settings = saveload.load_options()
+    set_color(settings.color)
 
     while True:
         characters = saveload.list_characters()
         show_main_menu(bool(characters))
 
-        key = resolve(_ask(), bool(characters))
+        choice = _ask()
+        key = resolve(choice, bool(characters))
 
         if key == "exit":
             return None
@@ -266,4 +295,5 @@ def run() -> tuple[Legacy, Settings] | None:
         elif key == "options":
             settings = edit_options(settings)
         elif key is None:
-            print("  Choose one of the numbers above.")
+            print(refusal(choice, bool(characters)))
+            _ask("  Press Enter to continue.")

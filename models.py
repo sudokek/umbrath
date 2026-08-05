@@ -177,6 +177,7 @@ class Settings:
     """Store user-facing game settings in one easy place."""
 
     auto_clear: bool = True
+    color: bool = True
     show_room_items: bool = True
     show_room_exits: bool = True
     show_move_message: bool = True
