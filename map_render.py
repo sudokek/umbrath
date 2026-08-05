@@ -13,6 +13,7 @@ continues off-screen.
 """
 
 from models import Room
+from ui import glyph, paint
 
 COL_STEP = 6  # horizontal distance between adjacent room cells
 ROW_STEP = 2  # vertical distance between adjacent room cells
@@ -106,13 +107,13 @@ def build_map(
                 continue
             other = world[target]
             if other.x == room.x + 1 and other.y == room.y:
-                stamp(row, col + BOX_WIDTH, "-")
+                stamp(row, col + BOX_WIDTH, glyph("h"))
             elif other.x == room.x - 1 and other.y == room.y:
-                stamp(row, col - 1, "-")
+                stamp(row, col - 1, glyph("h"))
             elif other.y == room.y + 1 and other.x == room.x:
-                stamp(row - 1, col + 2, "|")
+                stamp(row - 1, col + 2, glyph("v"))
             elif other.y == room.y - 1 and other.x == room.x:
-                stamp(row + 1, col + 2, "|")
+                stamp(row + 1, col + 2, glyph("v"))
 
     lines = ["".join(line).rstrip() for line in canvas]
     lines.append("")

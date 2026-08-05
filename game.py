@@ -36,7 +36,7 @@ from content import (
 from map_render import build_map
 from models import Item, Legacy, Room, Settings
 from parser import get_help_text, get_settings_help_text, match_target, parse_command
-from ui import bar, banner, center, clear_screen, paint, rule, set_color
+from ui import bar, banner, center, clear_screen, paint, rule, set_color, set_unicode
 from world import build_world
 
 DEFAULT_SAVE_PATH = "savegame.sav"
@@ -71,6 +71,7 @@ class Game:
 
         self.settings = settings if settings is not None else Settings()
         set_color(self.settings.color)
+        set_unicode(self.settings.line_drawing)
         self.legacy = legacy if legacy is not None else Legacy()
         self.legacy_path = legacy_path
         self.running = True

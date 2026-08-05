@@ -114,6 +114,59 @@ class BarTests(unittest.TestCase):
         self.assertEqual(len(widths), 1)
 
 
+class LineDrawingTests(unittest.TestCase):
+    """Box characters where the console can show them, ASCII where it cannot."""
+
+    def setUp(self):
+        self._was_ready = ui._UNICODE_READY
+        self._was_enabled = ui.unicode_enabled()
+        self.addCleanup(self._restore)
+
+    def _restore(self):
+        ui._UNICODE_READY = self._was_ready
+        ui.set_unicode(self._was_enabled)
+
+    def test_both_charsets_define_the_same_names(self):
+        self.assertEqual(
+            set(ui.GLYPHS["unicode"]), set(ui.GLYPHS["ascii"])
+        )
+
+    def test_every_glyph_is_a_single_column(self):
+        for charset in ui.GLYPHS.values():
+            for name, char in charset.items():
+                self.assertEqual(len(char), 1, f"{name}={char!r}")
+
+    def test_disabling_line_drawing_falls_back_to_ascii(self):
+        ui._UNICODE_READY = True
+        ui.set_unicode(False)
+        self.assertEqual(ui.glyph("h"), "-")
+        self.assertEqual(ui.glyph("v"), "|")
+
+    def test_line_drawing_stays_off_when_the_console_cannot_encode_it(self):
+        ui._UNICODE_READY = False
+        ui.set_unicode(True)
+        self.assertFalse(ui.unicode_enabled())
+        self.assertEqual(ui.glyph("tl"), "+")
+
+    def test_rules_are_the_interface_width_in_either_charset(self):
+        for ready in (True, False):
+            ui._UNICODE_READY = ready
+            ui.set_unicode(ready)
+            for char in ("=", "-"):
+                self.assertEqual(ui.visible_len(ui.rule(char)), WIDTH)
+
+    def test_frames_are_the_interface_width(self):
+        for ready in (True, False):
+            ui._UNICODE_READY = ready
+            ui.set_unicode(ready)
+            for line in (ui.frame_top(), ui.frame_bottom(), ui.frame_divider()):
+                self.assertEqual(ui.visible_len(line), WIDTH)
+
+    def test_a_titled_frame_is_still_the_interface_width(self):
+        for title in ("", "Options", "a very long title indeed for one line"):
+            self.assertEqual(ui.visible_len(ui.frame_top(title)), WIDTH, title)
+
+
 class BannerTests(unittest.TestCase):
     """The big ASCII shouts."""
 

@@ -4,6 +4,7 @@ import re
 import unittest
 
 from map_render import BOX_WIDTH, GRID_HEIGHT, LABEL_WIDTH, _box, build_map
+from ui import glyph
 from ui import WIDTH as UI_WIDTH
 from world import build_world
 
@@ -30,8 +31,10 @@ class BuildMapTests(unittest.TestCase):
         self.assertIn("[ ? ]", text)
 
     def test_connectors_present(self):
+        # The corridor character depends on whether the console can draw lines,
+        # so ask the interface rather than hardcoding one.
         text = "\n".join(build_map(self.world, {"square", "forest"}, "square"))
-        self.assertIn("-", text)  # square--forest horizontal link
+        self.assertIn(glyph("h"), text)  # square--forest horizontal link
 
 
 class BoxAlignmentTests(unittest.TestCase):
@@ -50,8 +53,9 @@ class BoxAlignmentTests(unittest.TestCase):
         world = build_world()
         cave = [key for key in world if key.startswith("cave1")]
         text = "\n".join(build_map(world, set(cave) | {"forest"}, cave[0]))
-        self.assertIsNone(re.search(r"[\]*] +-", text), text)
-        self.assertIsNone(re.search(r"- +[\[*]", text), text)
+        dash = re.escape(glyph("h"))
+        self.assertIsNone(re.search(rf"[\]*] +{dash}", text), text)
+        self.assertIsNone(re.search(rf"{dash} +[\[*]", text), text)
 
 
 class ViewportTests(unittest.TestCase):

@@ -15,7 +15,7 @@ from dataclasses import fields, replace
 import chargen
 import saveload
 from models import Legacy, Settings
-from ui import center, clear_screen, paint, right, rule, set_color
+from ui import center, clear_screen, paint, right, rule, set_color, set_unicode
 
 CREDIT = "created by sudokek"
 MAX_NAME = 24
@@ -240,6 +240,7 @@ def edit_options(settings: Settings) -> Settings:
         if choice.lower() in {"s", "save"}:
             saveload.save_options(working)
             set_color(working.color)
+            set_unicode(working.line_drawing)
             print("  Saved.")
             return working
 
@@ -254,6 +255,8 @@ def edit_options(settings: Settings) -> Settings:
             if name == "color":
                 # Apply at once so the screen shows what it will look like.
                 set_color(working.color)
+            elif name == "line_drawing":
+                set_unicode(working.line_drawing)
         else:
             raw = _ask(f"  New value for {name}> ")
             try:
@@ -271,6 +274,7 @@ def run() -> tuple[Legacy, Settings] | None:
     """Drive the title screen. Returns the character and settings to play, or None."""
     settings = saveload.load_options()
     set_color(settings.color)
+    set_unicode(settings.line_drawing)
 
     while True:
         characters = saveload.list_characters()

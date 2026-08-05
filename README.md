@@ -10,7 +10,23 @@ Dying is not the end. It is the loop.
 
 - **Python 3.10 or newer** (the code uses `X | Y` type-union syntax).
 
-No third-party packages — everything uses the standard library.
+**No third-party packages, and nothing to install.** Clone it and run it. Every
+visual effect is written with bytes the terminal already understands, so there
+is no dependency to vendor, pin, or download.
+
+### How it looks
+
+- **24-bit colour** where the terminal advertises it (Windows Terminal, most
+  modern Unix terminals), falling back to the 16 basic colours, and to no colour
+  at all where escapes are unsupported or `NO_COLOR` is set.
+- **Box-drawing characters** for the frame and the map's corridors, falling back
+  to `-` and `|` automatically when the console's encoding cannot carry them.
+- The health bar runs green → amber → red as you get hurt; bosses shout in
+  bright red.
+
+Both are detected at startup and can be forced either way from **Options**
+(`color`, `line_drawing`). Layout is measured ignoring colour escapes, so the
+interface is exactly 62 columns wide however it is drawn.
 
 ## Running
 
@@ -146,11 +162,11 @@ ASCII, drawn every turn, showing only what you've found:
 
 ```
       [Smt]
-        |
-[Mkt]-[Sqr]-[For]-*B0*-[ ? ]
-        |
+        │
+[Mkt]─[Sqr]─[For]─*B0*─[ ? ]
+        │
       [Inn]
-        |
+        │
       [Shr]
 ```
 
