@@ -141,6 +141,21 @@ three one-off items at a markup, sometimes gear from the *next* hold. Buy it and
 it's gone; leave the room and so are they. `talk` to hear them out. They pay
 better than a hold's market when you're selling.
 
+### Blood
+
+You are a vampire; what heals you is blood, and running out is how runs end.
+Four grades exist, from the `blood vial` (10 HP) up to the `ichor of ages`
+(120 HP), sold at any hold's night market.
+
+Reaching for it is meant to be effortless:
+
+- **`drink`** on its own opens the smallest vial that covers the wound — no
+  wasting an ichor of ages to top up three points.
+- Any word of an item's name works, so `use vial`, `use flask`, and
+  `use blood vial` all do the same thing.
+- The status bar shows how many you are carrying, and the screen tells you to
+  drink when you are badly hurt.
+
 ### Combat
 
 Every hit lands within ±25% of your attack power, and one in ten is a
@@ -191,7 +206,7 @@ explored rooms lie off-screen.
 | `flee` | | Try to escape the current fight. |
 | `examine <thing>` | | Describe an item, relic, ware, or enemy. |
 | `take` / `drop <item>` | `t` | Pick up / put down an item. |
-| `use <item>` | | Drink blood, mostly. |
+| `use <item>` | `drink` | Drink blood. Bare `drink` picks one for you. |
 | `equip <item>` | | Equip a weapon or armor. |
 | `talk` | | Speak to a wandering trader. |
 | `buy [item]` | | Buy from a forge, market, trader, or shrine. |
@@ -241,6 +256,7 @@ settings set min_command_prefix 2     # change a number (1-10)
 | `parser.py` | Turns typed text into commands. |
 | `saveload.py` | Saves, the Legacy file, scrambling, version tolerance. |
 | `ui.py` | Terminal helpers and the big ASCII banners. |
+| `testkit.py` | Shared test scaffolding (not collected: unittest globs `test*.py`). |
 | `test_*.py` | Unit tests, including `test_invariants.py`. |
 
 ## Running the tests

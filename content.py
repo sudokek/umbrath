@@ -312,6 +312,12 @@ THEMES: dict[str, dict] = {
 REGIONS = [
     {
         "index": 1,
+        "approach_name": (
+            "Forest Path"
+        ),
+        "approach_description": (
+            "Tall trees crowd the trail. {town} lies west; a dark barrow-door yawns to the east."
+        ),
         "town": "Greyfen",
         "theme": "barrow",
         "x": 0,
@@ -322,6 +328,18 @@ REGIONS = [
     },
     {
         "index": 2,
+        "approach_name": (
+            "The Ash Road"
+        ),
+        "approach_description": (
+            "The road runs over cracked grey flats where nothing grows. West is {town}; east, the ground glows faintly where it splits open."
+        ),
+        "road_name": (
+            "The Long Road East"
+        ),
+        "road_description": (
+            "Days of walking behind you, and {previous} far out of sight. The land here is grey and warm underfoot. {town} waits east, its chimneys smudging the sky."
+        ),
         "town": "Ashmoor",
         "theme": "ember",
         "x": 60,
@@ -331,6 +349,18 @@ REGIONS = [
     },
     {
         "index": 3,
+        "approach_name": (
+            "The White Pass"
+        ),
+        "approach_description": (
+            "A knife-edge pass between white walls, the wind screaming through it. {town} is west. East, the ice goes down."
+        ),
+        "road_name": (
+            "The Climbing Road"
+        ),
+        "road_description": (
+            "The road climbs, and keeps climbing. Behind you the ash country; ahead, {town}, white-roofed and half-buried, at the edge of the permanent snow."
+        ),
         "town": "Wintermourn",
         "theme": "rime",
         "x": 120,
@@ -356,23 +386,19 @@ def region_by_index(index: int) -> dict:
 # --------------------------------------------------------------------------
 
 
+def theme_style(theme: str) -> dict:
+    """The style block for a theme, falling back to the first hold's."""
+    return THEMES.get(theme, THEMES["barrow"])
+
+
+def region_style(region: int) -> dict:
+    """The style block for a hold, by its 1-based index."""
+    return theme_style(region_by_index(region)["theme"])
+
+
 def xp_value(hp: int, damage: int) -> int:
     """Derive an enemy's XP reward from how tough it is to kill."""
     return hp + damage * 2
-
-
-def spawn_enemy(theme: str, tier: int) -> Enemy:
-    """Create a random enemy from ``theme``'s bestiary at danger ``tier``."""
-    style = THEMES.get(theme, THEMES["barrow"])
-    pools = style["enemies"]
-    pool = pools.get(tier) or pools[max(pools)]
-    name, hp, damage, gold_min, gold_max, description = random.choice(pool)
-    return Enemy(
-        name=name, hp=hp, damage=damage,
-        gold=_scaled(random.randint(gold_min, gold_max), style["gold_scale"]),
-        xp=_scaled(xp_value(hp, damage), style["xp_scale"]),
-        description=description,
-    )
 
 
 def _scaled(value: int, scale: float) -> int:
@@ -380,15 +406,40 @@ def _scaled(value: int, scale: float) -> int:
     return max(1, int(round(value * scale)))
 
 
-def make_boss(theme: str) -> Enemy:
-    """Create the boss that guards ``theme``'s vault."""
-    style = THEMES[theme]
-    name, hp, damage, gold, relic, description = style["boss"]
+def _make_enemy(style, name, hp, damage, gold, description, **extra) -> Enemy:
+    """Build an enemy with its hold's reward scaling already applied.
+
+    Trash and bosses differ only in their stats and whether a relic falls out,
+    so both come through here and neither can forget to scale.
+    """
     return Enemy(
-        name=name, hp=hp, damage=damage,
+        name=name,
+        hp=hp,
+        damage=damage,
         gold=_scaled(gold, style["gold_scale"]),
         xp=_scaled(xp_value(hp, damage), style["xp_scale"]),
-        description=description, boss=True, relic=relic,
+        description=description,
+        **extra,
+    )
+
+
+def spawn_enemy(theme: str, tier: int) -> Enemy:
+    """Create a random enemy from ``theme``'s bestiary at danger ``tier``."""
+    style = theme_style(theme)
+    pools = style["enemies"]
+    pool = pools.get(tier) or pools[max(pools)]
+    name, hp, damage, gold_min, gold_max, description = random.choice(pool)
+    return _make_enemy(
+        style, name, hp, damage, random.randint(gold_min, gold_max), description
+    )
+
+
+def make_boss(theme: str) -> Enemy:
+    """Create the boss that guards ``theme``'s vault."""
+    style = theme_style(theme)
+    name, hp, damage, gold, relic, description = style["boss"]
+    return _make_enemy(
+        style, name, hp, damage, gold, description, boss=True, relic=relic
     )
 
 

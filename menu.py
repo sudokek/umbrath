@@ -122,10 +122,7 @@ def menu_lines(has_saves: bool) -> list[str]:
                 paint(f"   {number}. {label:<10} -- no saved characters yet", "dim")
             )
         else:
-            lines.append(
-                f"   {paint(str(number), 'bright_cyan')}. "
-                f"{paint(f'{label:<10}', 'bold')} -- {blurb}"
-            )
+            lines.append(f"{numbered(number, label, 10)} -- {blurb}")
     return lines
 
 
@@ -171,6 +168,29 @@ def screen(*blocks: str | None) -> None:
         print()
         print(paint(_notice, "bright_yellow"))
         _notice = ""
+
+
+def panel(title: str, *blocks: str | None) -> None:
+    """Draw a framed screen: a titled top edge, the blocks, a bottom edge."""
+    screen(frame_top(title), *blocks, frame_bottom())
+
+
+def wants_back(choice: str) -> bool:
+    """Did the player ask to leave this screen?"""
+    return not choice or choice.strip().lower() in {"b", "back"}
+
+
+def pick_index(choice: str, count: int) -> int | None:
+    """Turn a keystroke into a 0-based index into a list of ``count`` things."""
+    text = choice.strip()
+    if text.isdigit() and 1 <= int(text) <= count:
+        return int(text) - 1
+    return None
+
+
+def numbered(number: int, label: str, width: int, style: str = "bold") -> str:
+    """A menu row's leading "  N. Label" in the house style."""
+    return f"   {paint(str(number), 'bright_cyan')}. {paint(f'{label:<{width}}', style)}"
 
 
 def _title_block() -> str:
@@ -241,23 +261,23 @@ def choose_saved_character(characters) -> Legacy | None:
         )
 
         choice = _ask()
-        if not choice or choice.lower() in {"b", "back"}:
+        if wants_back(choice):
             return None
-        if choice.isdigit() and 1 <= int(choice) <= len(shown):
-            return shown[int(choice) - 1][1]
+        index = pick_index(choice, len(shown))
+        if index is not None:
+            return shown[index][1]
         notify("  No such history.")
 
 
 def _ask_name() -> str | None:
     """First screen of creation: the name. None if the player backs out."""
-    screen(
-        frame_top("A new history"),
+    panel(
+        "A new history",
         "",
         center(paint("What name will they curse?", "bold")),
         "",
         center(paint("(blank to go back)", "dim")),
         "",
-        frame_bottom(),
     )
     return _ask()[:MAX_NAME] or None
 
@@ -285,8 +305,8 @@ def _ask_origin(name: str):
 
 def _confirm_character(name: str, origin) -> None:
     """Third screen: what they have become."""
-    screen(
-        frame_top("Risen"),
+    panel(
+        "Risen",
         "",
         center(paint(f"{name}, {origin.name}", "bold", "bright_red")),
         "",
@@ -294,7 +314,6 @@ def _confirm_character(name: str, origin) -> None:
         "",
         wrap(f"You begin with: {origin.summary()}"),
         "",
-        frame_bottom(),
     )
     _ask("Press Enter to rise.")
 
@@ -349,7 +368,7 @@ def edit_options(settings: Settings) -> Settings:
         )
 
         choice = _ask()
-        if not choice or choice.lower() in {"b", "back"}:
+        if wants_back(choice):
             # Toggling previews on the live display, so backing out has to
             # put the display back as well as discarding the value.
             set_color(settings.color)

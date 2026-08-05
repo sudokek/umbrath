@@ -25,16 +25,15 @@ more rewarding.
 
 import random
 
-from content import THEMES, make_boss, make_item
+from content import make_boss, make_item, theme_style
+# Labels have to fit the renderer's box, so it owns the width.
+from map_render import LABEL_WIDTH
 from models import Room
 
 OPPOSITE = {"north": "south", "south": "north", "east": "west", "west": "east"}
 STEPS = {"north": (0, 1), "south": (0, -1), "east": (1, 0), "west": (-1, 0)}
 
 DEFAULT_ROOM_COUNT = 14
-
-# Map labels are always at most this wide so the map grid lines up.
-LABEL_WIDTH = 3
 
 # Chance of adding an extra corridor between two rooms that already sit next to
 # each other. Enough that caves are networks rather than trees, low enough that
@@ -88,7 +87,7 @@ def generate_cave(
     the vault.
     """
     rng = random.Random(seed)
-    style = THEMES.get(theme, THEMES["barrow"])
+    style = theme_style(theme)
     prefix = style["label"]
     reserved = reserved or set()
 

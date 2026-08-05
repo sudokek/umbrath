@@ -4,17 +4,7 @@ import unittest
 
 from dungeon import DEFAULT_ROOM_COUNT, OPPOSITE, STEPS, generate_cave
 from map_render import LABEL_WIDTH
-
-
-def _walk(rooms, start):
-    """Return every room key reachable from ``start`` inside ``rooms``."""
-    seen, stack = {start}, [start]
-    while stack:
-        for target in rooms[stack.pop()].exits.values():
-            if target in rooms and target not in seen:
-                seen.add(target)
-                stack.append(target)
-    return seen
+from testkit import reachable as _walk
 
 
 class GenerationTests(unittest.TestCase):

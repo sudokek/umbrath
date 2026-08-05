@@ -19,33 +19,8 @@ from legacy import bonuses, new_player
 from map_render import LABEL_WIDTH, build_map
 from models import Legacy
 from ui import WIDTH as UI_WIDTH
+from testkit import SEEDS, bosses_in, reachable as walk, vault_of
 from world import build_world, region_bounds
-
-SEEDS = range(120)
-
-
-def walk(world, start="square"):
-    """Every room reachable from ``start``."""
-    seen, stack = {start}, [start]
-    while stack:
-        for target in world[stack.pop()].exits.values():
-            if target in world and target not in seen:
-                seen.add(target)
-                stack.append(target)
-    return seen
-
-
-def vault_of(world, region):
-    """The boss room of a hold."""
-    return next(
-        (
-            room
-            for room in world.values()
-            if room.region == region and any(e.boss for e in room.enemies)
-        ),
-        None,
-    )
-
 
 class WorldIntegrityTests(unittest.TestCase):
     """Structural guarantees for every generated world."""
@@ -123,12 +98,10 @@ class ProgressionInvariantTests(unittest.TestCase):
         for seed in SEEDS:
             world = build_world(seed)
             for spec in REGIONS:
-                bosses = [
-                    room
-                    for room in world.values()
-                    if room.region == spec["index"] and any(e.boss for e in room.enemies)
-                ]
-                self.assertEqual(len(bosses), 1, f"seed {seed}, {spec['town']}")
+                self.assertEqual(
+                    len(bosses_in(world, spec["index"])), 1,
+                    f"seed {seed}, {spec['town']}",
+                )
 
     def test_the_only_way_onward_is_through_the_boss(self):
         for seed in SEEDS:

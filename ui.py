@@ -264,13 +264,15 @@ def frame_divider(title: str = "", style: str = "stone") -> str:
 def _edge(left: str, right: str, title: str, style: str) -> str:
     """One horizontal edge of a panel, with an optional inset title."""
     horizontal = glyph("h")
+    plain = paint(left + horizontal * (WIDTH - 2) + right, style)
+
     if not title:
-        return paint(left + horizontal * (WIDTH - 2) + right, style)
+        return plain
 
     label = f" {title} "
     room = WIDTH - 2 - len(label)
     if room < 2:
-        return paint(left + horizontal * (WIDTH - 2) + right, style)
+        return plain
 
     lead = 2
     return (
@@ -290,6 +292,23 @@ def center(text: str) -> str:
 def right(text: str) -> str:
     """Right-align text within the interface width, ignoring colour escapes."""
     return " " * max(0, WIDTH - visible_len(text)) + text
+
+
+ELLIPSIS = "..."
+
+
+def fit(text: str, width: int) -> str:
+    """Trim text to a column, breaking at a word and marking the cut.
+
+    The result is never wider than ``width``: the ellipsis counts toward the
+    budget, and one column of overflow is all it takes to break a frame.
+    """
+    if len(text) <= width:
+        return text
+    clipped = text[: max(0, width - len(ELLIPSIS))]
+    if " " in clipped:
+        clipped = clipped.rsplit(" ", 1)[0]
+    return clipped.rstrip() + ELLIPSIS
 
 
 def wrap(text: str, indent: str = "  ") -> str:

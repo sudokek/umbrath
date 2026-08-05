@@ -10,9 +10,10 @@ build if any of them drifts off it. Adding a race is a matter of appending one
 entry that totals the budget.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from content import ITEMS
+from ui import fit as _fit
 
 # What one point of each bonus is worth. Attack and defense are scarce and
 # compound with everything else, so they cost the most; HP and coin are cheap
@@ -203,23 +204,6 @@ def listing(width: int = 62) -> list[str]:
     return lines
 
 
-ELLIPSIS = "..."
-
-
-def _fit(text: str, width: int) -> str:
-    """Trim text to fit a column, breaking at a word and marking the cut.
-
-    The result is never wider than ``width`` -- the ellipsis is counted, which
-    it was not at first, and one column of overflow was enough to break the
-    frame it sits inside.
-    """
-    if len(text) <= width:
-        return text
-    room = max(0, width - len(ELLIPSIS))
-    clipped = text[:room]
-    if " " in clipped:
-        clipped = clipped.rsplit(" ", 1)[0]
-    return clipped.rstrip() + ELLIPSIS
 
 
 def by_number(choice: str) -> Origin | None:

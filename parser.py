@@ -12,7 +12,7 @@ COMMANDS = {
     "examine": {"help": "Inspect something more closely."},
     "take": {"help": "Pick up an item."},
     "drop": {"help": "Drop an item."},
-    "use": {"help": "Use an item (potions heal you)."},
+    "use": {"help": "Drink blood to heal. Bare 'drink' picks one for you."},
     "equip": {"help": "Equip a weapon or armor."},
     "attack": {"help": "Attack the enemy here (repeat with Enter)."},
     "flee": {"help": "Escape combat, retreating to safety."},
@@ -51,6 +51,9 @@ MANUAL_ALIASES = {
 # prefix matching (so "exit" does not fight "examine" for the "ex" prefix).
 SYNONYMS = {
     "exit": "quit",
+    # You are a vampire; what you use is blood. "drink" is the word players
+    # reach for, and bare "drink" heals with the best-suited vial you carry.
+    "drink": "use",
 }
 
 
@@ -195,12 +198,29 @@ def match_target(
     if text in choices:
         return text, None
 
+    # Choices come straight from an inventory, which can hold three of the same
+    # vial. Without collapsing duplicates, carrying two blood vials made
+    # `use vial` report itself as ambiguous with itself.
+    choices = list(dict.fromkeys(choices))
+
     matches = [choice for choice in choices if choice.startswith(text)]
+
+    # Items have two-word names, and the word players reach for is usually the
+    # second one -- "vial", "flask", "sword". Without this, `use vial` failed
+    # while `use blood` worked, which is not a distinction anyone should have to
+    # learn.
+    if not matches:
+        matches = [
+            choice
+            for choice in choices
+            if any(word.startswith(text) for word in choice.split())
+        ]
+
     if len(matches) == 1:
         return matches[0], None
 
     if len(matches) > 1:
-        return None, f"Ambiguous target: {text}"
+        return None, f"Ambiguous target: {text} ({', '.join(sorted(matches))})"
 
     typo_match = fuzzy_match(text, choices, enabled=typo_correction, cutoff=0.75)
     if typo_match:

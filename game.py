@@ -17,7 +17,6 @@ from dataclasses import asdict, replace
 import legacy as legacy_rules
 import saveload
 from content import (
-    BLESSINGS,
     ENTER_ENCOUNTER_CHANCE,
     EXPLORE_ENEMY_CHANCE,
     EXPLORE_GOLD_CHANCE,
@@ -158,16 +157,22 @@ class Game:
                 return item
         return None
 
-    def _resolve(self, raw_target: str, items: list[Item]) -> tuple[Item | None, str | None]:
-        """Match raw text to one item name in ``items``. Returns (item, error)."""
+    def pick(self, raw_target: str, items: list[Item]) -> Item | None:
+        """Match raw text to one of ``items``, reporting the failure itself.
+
+        Returns None when nothing matched, having already left the reason in
+        the message -- so every caller is `item = self.pick(...)` followed by
+        `if item is None: return`, instead of unpacking a tuple seven times.
+        """
         name, error = match_target(
             raw_target,
             [item.name for item in items],
             typo_correction=self.settings.typo_correction,
         )
         if error:
-            return None, error
-        return self._find_by_name(items, name), None
+            self.say(error)
+            return None
+        return self._find_by_name(items, name)
 
     # -- rendering ---------------------------------------------------------
 
@@ -192,8 +197,10 @@ class Game:
             f"Armor: {armor} (DEF {player.defense()})   "
             f"XP {player.xp}/{player.xp_to_next()}"
         ))
+        vials = len(self.blood())
         print(center(
             f"Hold {room.region}/{FINAL_REGION}   "
+            f"Blood {paint(str(vials), 'bright_red' if vials else 'dim')}   "
             f"Echoes {self.legacy.echoes}   Relics {len(player.relics)}"
         ))
         print(rule("="))
@@ -234,11 +241,30 @@ class Game:
         if self.settings.show_room_exits:
             print("Exits:", ", ".join(room.exits.keys()))
 
+        hint = self._hint()
+        if hint:
+            print(paint(hint, "bright_yellow"))
+
         print(rule("-"))
 
         if self.message:
             print(self.message)
             self.message = ""
+
+    def _hint(self) -> str | None:
+        """A nudge when the player is in trouble and has an answer to hand.
+
+        Only shown when it is actionable: badly hurt with blood in the pack, or
+        badly hurt with none and standing somewhere that sells it.
+        """
+        player = self.player
+        if player.hp > player.max_hp * 0.4:
+            return None
+        if self.blood():
+            return "You are badly hurt. Type DRINK to open a vial."
+        if self.current_room().shop:
+            return "You are badly hurt, and out of blood. BUY some."
+        return "You are badly hurt, with nothing to drink. Retreat to a hold."
 
     # -- movement & encounters --------------------------------------------
 
@@ -520,9 +546,8 @@ class Game:
     def take_item(self, raw_target: str) -> None:
         """Pick up an item from the current room."""
         room = self.current_room()
-        item, error = self._resolve(raw_target, room.items)
-        if error:
-            self.say(error)
+        item = self.pick(raw_target, room.items)
+        if item is None:
             return
         room.items.remove(item)
         self.player.inventory.append(item)
@@ -537,9 +562,8 @@ class Game:
 
     def drop_item(self, raw_target: str) -> None:
         """Drop an item from the inventory into the current room."""
-        item, error = self._resolve(raw_target, self.player.inventory)
-        if error:
-            self.say(error)
+        item = self.pick(raw_target, self.player.inventory)
+        if item is None:
             return
         self.player.inventory.remove(item)
         self._unequip_if_held(item)
@@ -569,12 +593,44 @@ class Game:
         )
         self.say(error if error else descriptions[name])
 
+    def blood(self) -> list[Item]:
+        """Everything in the pack that can be drunk, weakest first."""
+        return sorted(
+            (item for item in self.player.inventory if item.kind == "potion"),
+            key=lambda item: item.power,
+        )
+
+    def _best_blood(self) -> Item | None:
+        """The vial to drink right now: the smallest that would not be wasted.
+
+        Drinking an ichor of ages to top up three points is a waste, so this
+        reaches for the weakest one that covers the wound, and only falls back
+        to the strongest when nothing covers it.
+        """
+        missing = self.player.max_hp - self.player.hp
+        carried = self.blood()
+        if not carried:
+            return None
+        enough = [item for item in carried if item.power >= missing]
+        return enough[0] if enough else carried[-1]
+
     def use_item(self, raw_target: str) -> None:
-        """Use an item. Potions and elixirs restore health."""
-        item, error = self._resolve(raw_target, self.player.inventory)
-        if error:
-            self.say(error)
-            return
+        """Drink blood. With no target, pick the vial that best fits the wound."""
+        if not raw_target.strip():
+            if self.player.hp >= self.player.max_hp:
+                self.say("You are whole. Save it for when you are not.")
+                return
+            item = self._best_blood()
+            if item is None:
+                self.say(
+                    "You carry nothing to drink.",
+                    "Blood is sold at the night market in any hold.",
+                )
+                return
+        else:
+            item = self.pick(raw_target, self.player.inventory)
+            if item is None:
+                return
 
         if item.kind != "potion":
             self.say(f"Nothing happens when you use the {item.name}.")
@@ -590,9 +646,8 @@ class Game:
 
     def equip_item(self, raw_target: str) -> None:
         """Equip a weapon or armor from the inventory."""
-        item, error = self._resolve(raw_target, self.player.inventory)
-        if error:
-            self.say(error)
+        item = self.pick(raw_target, self.player.inventory)
+        if item is None:
             return
 
         if item.kind == "weapon":
@@ -648,9 +703,8 @@ class Game:
             self.say(*lines)
             return
 
-        item, error = self._resolve(raw_target, stock)
-        if error:
-            self.say(error)
+        item = self.pick(raw_target, stock)
+        if item is None:
             return
 
         if self.player.gold < item.price:
@@ -685,9 +739,8 @@ class Game:
             self.say(*lines)
             return
 
-        item, error = self._resolve(raw_target, stock)
-        if error:
-            self.say(error)
+        item = self.pick(raw_target, stock)
+        if item is None:
             return
 
         if self.legacy.echoes < item.price:
@@ -715,9 +768,8 @@ class Game:
             self.say("You can't sell anything here.")
             return
 
-        item, error = self._resolve(raw_target, self.player.inventory)
-        if error:
-            self.say(error)
+        item = self.pick(raw_target, self.player.inventory)
+        if item is None:
             return
 
         # Traders know what deep loot is worth, and pay accordingly.

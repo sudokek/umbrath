@@ -4,10 +4,7 @@ The menu's decision-making is separated from its prompting, so everything here
 runs without feeding fake keystrokes to ``input()``.
 """
 
-import contextlib
-import io
 import os
-import tempfile
 import time
 import unittest
 import unittest.mock
@@ -16,6 +13,7 @@ import chargen
 import ui
 import menu
 import saveload
+from testkit import DisplayMixin, TempFileMixin, capture
 from models import Legacy, Settings
 from ui import WIDTH, visible_len
 
@@ -88,10 +86,7 @@ class ScreenModelTests(unittest.TestCase):
         menu.notify("")  # start from a clean slate
 
     def _draw(self, *blocks) -> str:
-        buffer = io.StringIO()
-        with contextlib.redirect_stdout(buffer):
-            menu.screen(*blocks)
-        return buffer.getvalue()
+        return capture(menu.screen, *blocks)
 
     def test_a_screen_clears_before_drawing(self):
         # Without this, each screen piles up under the last one.
@@ -189,28 +184,18 @@ class LoadScreenTests(unittest.TestCase):
         self.assertLessEqual(rows, ScreenFitTests.TERMINAL_ROWS, f"{rows} rows")
 
 
-class OptionsPreviewTests(unittest.TestCase):
+class OptionsPreviewTests(DisplayMixin, unittest.TestCase):
     """Toggling previews on the live display, so backing out must undo it."""
 
     def setUp(self):
-        self._color = ui.color_enabled()
-        self._unicode = ui.unicode_enabled()
-        self._ansi, self._uni_ready = ui._ANSI_READY, ui._UNICODE_READY
-        ui._ANSI_READY = ui._UNICODE_READY = True
-        ui.set_color(True)
-        ui.set_unicode(True)
-        self.addCleanup(self._restore)
-
-    def _restore(self):
-        ui._ANSI_READY, ui._UNICODE_READY = self._ansi, self._uni_ready
-        ui.set_color(self._color)
-        ui.set_unicode(self._unicode)
+        self.force_display()
 
     def _run_options(self, *keystrokes):
         answers = iter(keystrokes)
+        result = {}
         with unittest.mock.patch("builtins.input", lambda _="": next(answers, "")):
-            with contextlib.redirect_stdout(io.StringIO()):
-                return menu.edit_options(Settings())
+            capture(lambda: result.setdefault("out", menu.edit_options(Settings())))
+        return result["out"]
 
     def test_backing_out_restores_the_display(self):
         # Regression: the toggle applied to the live display immediately, but
@@ -231,14 +216,8 @@ class OptionsPreviewTests(unittest.TestCase):
         self.assertFalse(ui.unicode_enabled())
 
 
-class OptionsTests(unittest.TestCase):
+class OptionsTests(TempFileMixin, unittest.TestCase):
     """Options are editable and persist between launches."""
-
-    def _temp_path(self) -> str:
-        handle, path = tempfile.mkstemp(suffix=".sav")
-        os.close(handle)
-        self.addCleanup(lambda: os.path.exists(path) and os.remove(path))
-        return path
 
     def test_every_setting_is_offered(self):
         from dataclasses import fields
@@ -247,7 +226,7 @@ class OptionsTests(unittest.TestCase):
         self.assertEqual(names, [f.name for f in fields(Settings)])
 
     def test_options_round_trip(self):
-        path = self._temp_path()
+        path = self.temp_path()
         settings = Settings(show_map=False, min_command_prefix=2)
         saveload.save_options(settings, path)
         self.assertEqual(saveload.load_options(path), settings)
@@ -256,7 +235,7 @@ class OptionsTests(unittest.TestCase):
         self.assertEqual(saveload.load_options("no_such_options.sav"), Settings())
 
     def test_corrupt_options_fall_back_to_defaults(self):
-        path = self._temp_path()
+        path = self.temp_path()
         with open(path, "w", encoding="utf-8") as handle:
             handle.write("not a save")
         self.assertEqual(saveload.load_options(path), Settings())
@@ -270,17 +249,11 @@ class OptionsTests(unittest.TestCase):
         self.assertFalse(game.settings.auto_clear)
 
 
-class CharacterListingTests(unittest.TestCase):
+class CharacterListingTests(TempFileMixin, unittest.TestCase):
     """Continue and Load read the same list, newest first."""
 
     def setUp(self):
-        self.directory = tempfile.mkdtemp()
-        self.addCleanup(self._cleanup)
-
-    def _cleanup(self):
-        for entry in os.listdir(self.directory):
-            os.remove(os.path.join(self.directory, entry))
-        os.rmdir(self.directory)
+        self.directory = self.temp_dir()
 
     def _write(self, name: str) -> None:
         path = os.path.join(self.directory, f"{saveload.slug(name)}.sav")

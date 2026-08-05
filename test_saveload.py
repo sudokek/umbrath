@@ -6,19 +6,13 @@ import tempfile
 import unittest
 
 import saveload
+from testkit import TempFileMixin
 from content import make_item
 from game import Game
 
 
-class SaveLoadTests(unittest.TestCase):
+class SaveLoadTests(TempFileMixin, unittest.TestCase):
     """Round-trip saves in both obfuscated and plain modes."""
-
-    def _temp_path(self) -> str:
-        """Return an absolute temp path that is cleaned up after the test."""
-        fd, path = tempfile.mkstemp(suffix=".json")
-        os.close(fd)
-        self.addCleanup(lambda: os.path.exists(path) and os.remove(path))
-        return path
 
     def _read(self, path: str) -> str:
         with open(path, "r", encoding="utf-8") as handle:
@@ -28,7 +22,7 @@ class SaveLoadTests(unittest.TestCase):
         game = Game()
         game.player.gold = 999
         game.settings.obfuscate_saves = True
-        path = self._temp_path()
+        path = self.temp_path()
 
         saveload.save_game(game, path)
 
@@ -45,7 +39,7 @@ class SaveLoadTests(unittest.TestCase):
         game = Game()
         game.player.gold = 42
         game.settings.obfuscate_saves = False
-        path = self._temp_path()
+        path = self.temp_path()
 
         saveload.save_game(game, path)
 
@@ -58,7 +52,7 @@ class SaveLoadTests(unittest.TestCase):
         self.assertEqual(loaded.player.gold, 42)
 
     def test_corrupt_obfuscated_save_raises_valueerror(self):
-        path = self._temp_path()
+        path = self.temp_path()
         with open(path, "w", encoding="utf-8") as handle:
             handle.write(saveload.MAGIC + "not-valid-base64-data!!!")
 
@@ -73,7 +67,7 @@ class SaveLoadTests(unittest.TestCase):
         game.player.max_hp = 35
         game.player.inventory.append(make_item("grave sword"))
         game.equip_item("grave sword")
-        path = self._temp_path()
+        path = self.temp_path()
 
         saveload.save_game(game, path)
         loaded = Game()
@@ -110,7 +104,7 @@ class DungeonSeedTests(unittest.TestCase):
         self.assertEqual({k: r.name for k, r in loaded.world.items()}, before)
 
 
-class SaveCompatibilityTests(unittest.TestCase):
+class SaveCompatibilityTests(TempFileMixin, unittest.TestCase):
     """Loading must survive version drift instead of crashing the game."""
 
     def _write_save(self, mutate) -> str:

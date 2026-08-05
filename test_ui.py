@@ -7,24 +7,17 @@ and it must vanish cleanly on a terminal that cannot render it.
 import unittest
 
 import ui
+from testkit import DisplayMixin
 from ui import WIDTH
 
 
-class ColorTests(unittest.TestCase):
+class ColorTests(DisplayMixin, unittest.TestCase):
     """Painting text, and not painting it."""
 
     def setUp(self):
-        # Pretend the terminal understands escapes, whatever is really running
-        # the tests, then restore afterwards.
-        self._was_ready = ui._ANSI_READY
-        self._was_enabled = ui.color_enabled()
-        ui._ANSI_READY = True
-        ui.set_color(True)
-        self.addCleanup(self._restore)
-
-    def _restore(self):
-        ui._ANSI_READY = self._was_ready
-        ui.set_color(self._was_enabled)
+        # Pretend the terminal understands escapes, whatever really runs the
+        # tests; the mixin puts the real values back afterwards.
+        self.force_display()
 
     def test_paint_wraps_and_resets(self):
         painted = ui.paint("hi", "red")
@@ -53,19 +46,11 @@ class ColorTests(unittest.TestCase):
         self.assertEqual(ui.paint("x", "red"), "x")
 
 
-class AlignmentTests(unittest.TestCase):
+class AlignmentTests(DisplayMixin, unittest.TestCase):
     """Colour must not disturb the layout."""
 
     def setUp(self):
-        self._was_ready = ui._ANSI_READY
-        self._was_enabled = ui.color_enabled()
-        ui._ANSI_READY = True
-        ui.set_color(True)
-        self.addCleanup(self._restore)
-
-    def _restore(self):
-        ui._ANSI_READY = self._was_ready
-        ui.set_color(self._was_enabled)
+        self.force_display()
 
     def test_visible_len_ignores_escapes(self):
         self.assertEqual(ui.visible_len(ui.paint("seven!!", "red")), 7)
@@ -114,17 +99,11 @@ class BarTests(unittest.TestCase):
         self.assertEqual(len(widths), 1)
 
 
-class LineDrawingTests(unittest.TestCase):
+class LineDrawingTests(DisplayMixin, unittest.TestCase):
     """Box characters where the console can show them, ASCII where it cannot."""
 
     def setUp(self):
-        self._was_ready = ui._UNICODE_READY
-        self._was_enabled = ui.unicode_enabled()
-        self.addCleanup(self._restore)
-
-    def _restore(self):
-        ui._UNICODE_READY = self._was_ready
-        ui.set_unicode(self._was_enabled)
+        self.force_display()
 
     def test_both_charsets_define_the_same_names(self):
         self.assertEqual(

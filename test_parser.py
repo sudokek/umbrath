@@ -115,6 +115,39 @@ class MatchTargetTests(unittest.TestCase):
         self.assertIn("missing", error.lower())
 
 
+class TwoWordNameTests(unittest.TestCase):
+    """Items have two-word names; players type whichever word is distinctive."""
+
+    BLOOD = ["blood vial", "vitae flask", "heart's blood", "grave sword"]
+
+    def test_the_second_word_matches(self):
+        # Regression: matching was prefix-only on the whole name, so `use vial`
+        # failed while `use blood` worked -- a distinction nobody should learn.
+        self.assertEqual(match_target("vial", self.BLOOD)[0], "blood vial")
+        self.assertEqual(match_target("flask", self.BLOOD)[0], "vitae flask")
+        self.assertEqual(match_target("sword", self.BLOOD)[0], "grave sword")
+
+    def test_the_first_word_still_matches(self):
+        self.assertEqual(match_target("vitae", self.BLOOD)[0], "vitae flask")
+        self.assertEqual(match_target("grave", self.BLOOD)[0], "grave sword")
+
+    def test_a_whole_name_still_wins_outright(self):
+        self.assertEqual(match_target("blood vial", self.BLOOD)[0], "blood vial")
+
+    def test_duplicates_are_not_ambiguous_with_themselves(self):
+        # Regression: carrying three of the same vial made `use vial` report
+        # "Ambiguous target: blood vial, blood vial, blood vial".
+        pack = ["blood vial", "blood vial", "blood vial"]
+        self.assertEqual(match_target("vial", pack), ("blood vial", None))
+        self.assertEqual(match_target("blood", pack), ("blood vial", None))
+
+    def test_real_ambiguity_still_reports_the_candidates(self):
+        name, error = match_target("b", ["blood vial", "bone dagger"])
+        self.assertIsNone(name)
+        self.assertIn("blood vial", error)
+        self.assertIn("bone dagger", error)
+
+
 class FuzzyMatchTests(unittest.TestCase):
     """Cover the typo-correction helper."""
 

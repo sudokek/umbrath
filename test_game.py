@@ -1,21 +1,13 @@
 """Unit tests for the Game object: combat, economy, movement, and dispatch."""
 
-import io
-import contextlib
 import unittest
 from unittest.mock import patch
 
 import parser as command_parser
 from content import make_item
-from game import REST_COST, Game
+from game import REST_COST
+from testkit import capture, make_game
 from models import Enemy
-
-
-def make_game() -> Game:
-    """Return a game with the screen-clearing turned off for quiet tests."""
-    game = Game()
-    game.settings.auto_clear = False
-    return game
 
 
 class DispatchTests(unittest.TestCase):
@@ -246,6 +238,78 @@ class ItemTests(unittest.TestCase):
         self.assertEqual(game.message, "Nasty.")
 
 
+class DrinkingTests(unittest.TestCase):
+    """Blood is the resource you die without, so reaching for it must be easy."""
+
+    def _game(self, *extra):
+        game = make_game()
+        for name in extra:
+            game.player.inventory.append(make_item(name))
+        return game
+
+    def test_drink_is_a_synonym_for_use(self):
+        game = self._game()
+        game.player.hp = 5
+        game.handle_command("drink")
+        self.assertEqual(game.player.hp, 15)
+
+    def test_bare_drink_picks_the_smallest_vial_that_covers_the_wound(self):
+        # Opening an ichor of ages to top up three points is a waste.
+        game = self._game("vitae flask", "ichor of ages")
+        game.player.max_hp = 200
+        game.player.hp = 190
+        game.use_item("")
+        self.assertIn("blood vial", game.message)
+
+    def test_bare_drink_falls_back_to_the_strongest_when_nothing_covers(self):
+        game = self._game("vitae flask", "ichor of ages")
+        game.player.max_hp = 300
+        game.player.hp = 10
+        game.use_item("")
+        self.assertIn("ichor of ages", game.message)
+
+    def test_bare_drink_refuses_when_you_are_whole(self):
+        game = self._game()
+        game.use_item("")
+        self.assertIn("You are whole", game.message)
+        self.assertEqual(len(game.blood()), 1)  # nothing was spent
+
+    def test_bare_drink_says_where_to_get_more(self):
+        game = self._game()
+        game.player.inventory.clear()
+        game.player.hp = 5
+        game.use_item("")
+        self.assertIn("night market", game.message)
+
+    def test_carrying_several_of_one_vial_is_not_ambiguous(self):
+        game = self._game("blood vial", "blood vial")
+        game.player.hp = 5
+        game.use_item("vial")
+        self.assertEqual(game.player.hp, 15)
+        self.assertEqual(len(game.blood()), 2)
+
+    def test_blood_lists_what_can_be_drunk_weakest_first(self):
+        game = self._game("ichor of ages", "vitae flask")
+        self.assertEqual(
+            [item.name for item in game.blood()],
+            ["blood vial", "vitae flask", "ichor of ages"],
+        )
+
+    def test_the_hint_appears_only_when_it_is_actionable(self):
+        game = self._game()
+        self.assertIsNone(game._hint())  # unhurt
+
+        game.player.hp = 1
+        self.assertIn("DRINK", game._hint())  # hurt, carrying blood
+
+        game.player.inventory.clear()
+        game.player.location = "market"
+        self.assertIn("BUY", game._hint())  # hurt, broke, standing in a shop
+
+        game.player.location = "square"
+        self.assertIn("Retreat", game._hint())  # hurt, nothing, nowhere
+
+
 class EconomyTests(unittest.TestCase):
     """Cover buying, selling, and resting."""
 
@@ -366,10 +430,7 @@ class RenderTests(unittest.TestCase):
     """The screen draw should be self-contained and consume the message."""
 
     def _draw(self, game) -> str:
-        buffer = io.StringIO()
-        with contextlib.redirect_stdout(buffer):
-            game.render()
-        return buffer.getvalue()
+        return capture(game.render)
 
     def test_render_shows_status_room_and_message(self):
         game = make_game()

@@ -101,9 +101,7 @@ def _from_dict(cls, data, what: str):
     blowing up, and a genuinely malformed record raises ``ValueError`` so the
     caller can report it as a bad save rather than crashing.
     """
-    if not isinstance(data, dict):
-        raise ValueError(f"save file has a malformed {what}")
-
+    data = _as_dict(data, what)
     known = {field.name for field in fields(cls)}
     try:
         return cls(**{key: value for key, value in data.items() if key in known})
@@ -148,11 +146,29 @@ def _read_text(target: str) -> str:
     return _deobfuscate(contents) if contents.startswith(MAGIC) else contents
 
 
+def _save_json(data: dict, path: str, obfuscate: bool = True) -> str:
+    """Serialise, optionally scramble, and write atomically. Returns the path."""
+    target = resolve_save_path(path)
+    text = json.dumps(data, indent=2)
+    _write_text(_obfuscate(text) if obfuscate else text, target)
+    return target
+
+
+def _load_dataclass(cls, path: str, what: str):
+    """Read a small dataclass file, or return a default one if it is unusable.
+
+    A missing or damaged file is not worth refusing to start over: the game
+    quietly falls back rather than reporting an error nobody can fix.
+    """
+    try:
+        return _from_dict(cls, json.loads(_read_text(resolve_save_path(path))), what)
+    except (OSError, ValueError):
+        return cls()
+
+
 def save_legacy(legacy: Legacy, path: str) -> str:
     """Write the cross-run Legacy to its own small file."""
-    target = resolve_save_path(path)
-    _write_text(_obfuscate(json.dumps(asdict(legacy), indent=2)), target)
-    return target
+    return _save_json(asdict(legacy), path)
 
 
 def load_legacy(path: str) -> Legacy:
@@ -161,15 +177,7 @@ def load_legacy(path: str) -> Legacy:
     A missing or damaged Legacy is not worth refusing to start over: the game
     quietly begins a first run rather than reporting an error nobody can fix.
     """
-    try:
-        data = json.loads(_read_text(resolve_save_path(path)))
-    except (OSError, ValueError):
-        return Legacy()
-
-    try:
-        loaded = _from_dict(Legacy, data, "legacy")
-    except ValueError:
-        return Legacy()
+    loaded = _load_dataclass(Legacy, path, "legacy")
 
     # Guard the containers: a hand-edited file must not crash a run later.
     if not isinstance(loaded.relics, list):
@@ -184,9 +192,7 @@ OPTIONS_PATH = os.path.join(SAVE_DIR, "options.sav")
 
 def save_options(settings: Settings, path: str = OPTIONS_PATH) -> str:
     """Write the menu's Options screen to disk. Returns the path written."""
-    target = resolve_save_path(path)
-    _write_text(_obfuscate(json.dumps(asdict(settings), indent=2)), target)
-    return target
+    return _save_json(asdict(settings), path)
 
 
 def load_options(path: str = OPTIONS_PATH) -> Settings:
@@ -195,11 +201,7 @@ def load_options(path: str = OPTIONS_PATH) -> Settings:
     Bad options are not worth refusing to start over: the game quietly falls
     back to defaults rather than reporting an error at the title screen.
     """
-    try:
-        data = json.loads(_read_text(resolve_save_path(path)))
-        return _from_dict(Settings, data, "options")
-    except (OSError, ValueError):
-        return Settings()
+    return _load_dataclass(Settings, path, "options")
 
 
 def list_characters(directory: str = SAVE_DIR) -> list[tuple[str, Legacy, float]]:
@@ -269,36 +271,11 @@ def _serialize(game) -> dict:
 
 def save_game(game, path: str) -> str:
     """Write the game state to ``path``. Returns the absolute path written."""
-    target = resolve_save_path(path)
-    directory = os.path.dirname(target) or "."
-
-    text = json.dumps(_serialize(game), indent=2)
-    if getattr(game.settings, "obfuscate_saves", True):
-        payload = _obfuscate(text)
-    else:
-        payload = text
-
-    # Write to a temp file in the same directory, then atomically replace, so a
-    # failure never leaves a half-written save behind.
-    handle = tempfile.NamedTemporaryFile(
-        mode="w",
-        encoding="utf-8",
-        suffix=".tmp",
-        dir=directory,
-        delete=False,
+    return _save_json(
+        _serialize(game),
+        path,
+        obfuscate=getattr(game.settings, "obfuscate_saves", True),
     )
-    try:
-        with handle:
-            handle.write(payload)
-        os.replace(handle.name, target)
-    except BaseException:
-        try:
-            os.remove(handle.name)
-        except OSError:
-            pass
-        raise
-
-    return target
 
 
 def load_game(game, path: str) -> str:

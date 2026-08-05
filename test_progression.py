@@ -8,24 +8,16 @@ from unittest.mock import patch
 import legacy as legacy_rules
 import saveload
 from content import FINAL_REGION, REGIONS, THEMES, make_trader
+import testkit
 from game import Game
+from testkit import TempFileMixin, make_game
 from models import Enemy, Legacy
 from world import build_world
 
 
-def make_game(legacy: Legacy | None = None) -> Game:
-    """A quiet game that never touches the real legacy file on disk."""
-    game = Game(legacy=legacy)
-    game.settings.auto_clear = False
-    return game
-
-
 def vault_of(game: Game, region: int):
-    """The boss room of a region, or None."""
-    for room in game.world.values():
-        if room.region == region and any(e.boss for e in room.enemies):
-            return room
-    return None
+    """The boss room of a region in a live game."""
+    return testkit.vault_of(game.world, region)
 
 
 class WorldShapeTests(unittest.TestCase):
@@ -296,21 +288,15 @@ class TraderTests(unittest.TestCase):
             self.assertGreater(item.price, ITEMS[item.name].price)
 
 
-class LegacyFileTests(unittest.TestCase):
+class LegacyFileTests(TempFileMixin, unittest.TestCase):
     """The Legacy is the one thing that persists on its own."""
-
-    def _temp_path(self) -> str:
-        handle, path = tempfile.mkstemp(suffix=".sav")
-        os.close(handle)
-        self.addCleanup(lambda: os.path.exists(path) and os.remove(path))
-        return path
 
     def test_legacy_round_trips(self):
         original = Legacy(
             runs=4, victories=1, echoes=9, relics=["gaunt fang"],
             blessings={"undeath": 2}, best_region=3,
         )
-        path = self._temp_path()
+        path = self.temp_path()
         saveload.save_legacy(original, path)
         self.assertEqual(saveload.load_legacy(path), original)
 
@@ -318,13 +304,13 @@ class LegacyFileTests(unittest.TestCase):
         self.assertEqual(saveload.load_legacy("no_such_legacy.sav"), Legacy())
 
     def test_a_corrupt_legacy_starts_a_fresh_one(self):
-        path = self._temp_path()
+        path = self.temp_path()
         with open(path, "w", encoding="utf-8") as handle:
             handle.write("not a save at all")
         self.assertEqual(saveload.load_legacy(path), Legacy())
 
     def test_ending_a_run_writes_the_legacy(self):
-        path = self._temp_path()
+        path = self.temp_path()
         game = make_game()
         game.legacy_path = path
         game.end_run(victory=False, epitaph="done")

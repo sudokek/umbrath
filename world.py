@@ -1,14 +1,16 @@
 """Build and return the game's world data.
 
-The world is three regions travelled in order, each a hand-authored town plus a
-generated cave (see ``dungeon.generate_cave``). A region's cave ends in a vault
-guarded by a boss; kill it and the road east opens onto the next town. Beat the
-third and the game is over.
+The world is three holds travelled in order, each a hand-authored settlement
+plus a generated underdark (see ``dungeon.generate_cave``). A hold's cave ends
+in a vault guarded by a boss; kill it and the road onward opens. Beat the third
+and the game is over.
 
-    Greenhollow --> Hollow Deeps --> Ashford --> Emberdeep --> Frostmere --> The Rime
+    Greyfen --> Barrow Warrens --> Ashmoor --> Emberdeeps --> Wintermourn --> Rimevault
 
-Each region occupies its own band of the coordinate grid (``REGIONS[n]["x"]``),
-far enough apart that no two regions' rooms can ever collide. The long roads
+Every hold's prose lives in ``content.REGIONS`` beside its gear and bestiary, so
+adding a fourth is a data change rather than four more functions. Each occupies
+its own band of the coordinate grid, far enough apart that no two holds' rooms
+can ever collide. The long roads
 between them are not drawn as map corridors -- they are journeys, not corridors.
 
 ``Game.__init__`` rolls a fresh seed for each new run -- so every playthrough
@@ -20,7 +22,6 @@ from content import (
     REGIONS,
     make_shop_gear,
     make_shop_potions,
-    make_shrine_stock,
     region_by_index,
 )
 from dungeon import OPPOSITE, generate_cave
@@ -85,133 +86,86 @@ def build_town(region: int = 1) -> dict[str, Room]:
     keys = town_keys(region)
     origin = spec["x"]
     town = spec["town"]
-    tag = town[:3]
+    rooms: dict[str, Room] = {}
 
-    rooms = {
-        keys["square"]: Room(
-            key=keys["square"],
-            name=f"{town} Square",
-            description=(
-                f"The heart of {town}. Roads run out in every direction and a "
-                "mossy fountain trickles in the middle."
-            ),
-            x=origin,
-            y=0,
-            label="Sqr" if region == 1 else tag,
-            exits={
-                "west": keys["market"],
-                "north": keys["smithy"],
-                "south": keys["inn"],
-                "east": keys["forest"],
-            },
+    def place(slot: str, dx: int, dy: int, label: str, name: str,
+              description: str, **extra) -> None:
+        """Add one room of this hold, filling in what every room shares."""
+        rooms[keys[slot]] = Room(
+            key=keys[slot],
+            name=name,
+            description=description,
+            x=origin + dx,
+            y=dy,
+            label=label,
             region=region,
-        ),
-        keys["market"]: Room(
-            key=keys["market"],
-            name=f"{town} Market",
-            description=(
-                "Traders hawk potions and trinkets under sagging awnings. "
-                "A sign reads: BUY and SELL here."
-            ),
-            x=origin - 1,
-            y=0,
-            label="Mkt",
-            exits={"east": keys["square"]},
-            shop=make_shop_potions(region),
-            can_sell=True,
-            region=region,
-        ),
-        keys["smithy"]: Room(
-            key=keys["smithy"],
-            name=f"The {town} Smithy",
-            description=(
-                "Heat rolls off the forge. Weapons and armor hang on the wall, "
-                "each with a price."
-            ),
-            x=origin,
-            y=1,
-            label="Smt",
-            exits={"south": keys["square"]},
-            shop=make_shop_gear(region),
-            region=region,
-        ),
-        keys["inn"]: Room(
-            key=keys["inn"],
-            name=f"The {town} Inn",
-            description=(
-                "A warm common room with a crackling hearth. You can REST here "
-                "to heal, for a price."
-            ),
-            x=origin,
-            y=-1,
-            label="Inn",
-            exits={"north": keys["square"]},
-            inn=True,
-            region=region,
-        ),
-        keys["forest"]: Room(
-            key=keys["forest"],
-            name=_approach_name(region),
-            description=_approach_description(region, town),
-            x=origin + 1,
-            y=0,
-            label="For" if region == 1 else "Way",
-            exits={"west": keys["square"], "east": cave_key(region)},
-            region=region,
-        ),
-    }
+            **extra,
+        )
 
-    # The shrine only stands in the first town -- the one you always wake in.
+    place(
+        "square", 0, 0, "Sqr" if region == 1 else town[:3],
+        f"{town} Square",
+        f"The heart of {town}. Roads run out in every direction and a mossy "
+        "fountain trickles in the middle.",
+        exits={
+            "west": keys["market"],
+            "north": keys["smithy"],
+            "south": keys["inn"],
+            "east": keys["forest"],
+        },
+    )
+    place(
+        "market", -1, 0, "Mkt",
+        f"{town} Market",
+        "Traders hawk blood and trinkets under sagging awnings. "
+        "A sign reads: BUY and SELL here.",
+        exits={"east": keys["square"]},
+        shop=make_shop_potions(region),
+        can_sell=True,
+    )
+    place(
+        "smithy", 0, 1, "Smt",
+        f"The {town} Charnel Forge",
+        "Heat rolls off the forge. Weapons and armor hang on the wall, each "
+        "with a price.",
+        exits={"south": keys["square"]},
+        shop=make_shop_gear(region),
+    )
+    place(
+        "inn", 0, -1, "Inn",
+        f"The {town} Inn",
+        "A warm common room with a crackling hearth. You can REST here to "
+        "heal, for a price.",
+        exits={"north": keys["square"]},
+        inn=True,
+    )
+    place(
+        "forest", 1, 0, "For" if region == 1 else "Way",
+        spec["approach_name"],
+        spec["approach_description"].format(town=town),
+        exits={"west": keys["square"], "east": cave_key(region)},
+    )
+
+    # The shrine only stands in the first hold -- the one you always wake in.
     if region == 1:
-        rooms[keys["shrine"]] = Room(
-            key=keys["shrine"],
-            name="The Shrine of Echoes",
-            description=(
-                "A cold little shrine of stacked stones, older than the village. "
-                "The dead leave echoes here, and the shrine will trade them for "
-                "something that lasts. BUY a blessing, if you have the echoes."
-            ),
-            x=origin,
-            y=-2,
-            label="Shr",
+        place(
+            "shrine", 0, -2, "Shr",
+            "The Shrine of Echoes",
+            "A cold little shrine of stacked stones, older than the village. "
+            "The dead leave echoes here, and the shrine will trade them for "
+            "something that lasts. BUY a blessing, if you have the echoes.",
             exits={"north": keys["inn"]},
             shrine=True,
-            region=region,
         )
         rooms[keys["inn"]].exits["south"] = keys["shrine"]
 
     return rooms
 
 
-def _approach_name(region: int) -> str:
-    """Name of the room between a town and its cave."""
-    return {1: "Forest Path", 2: "The Ash Road", 3: "The White Pass"}.get(
-        region, "The Way Out"
-    )
-
-
-def _approach_description(region: int, town: str) -> str:
-    """Flavor for the room between a town and its cave."""
-    return {
-        1: (
-            f"Tall trees crowd the trail. {town} lies west; a dark cave mouth "
-            "yawns to the east."
-        ),
-        2: (
-            "The road runs over cracked grey flats where nothing grows. West is "
-            f"{town}; east, the ground glows faintly where it splits open."
-        ),
-        3: (
-            "A knife-edge pass between white walls, the wind screaming through "
-            f"it. {town} is west. East, the ice goes down."
-        ),
-    }.get(region, f"The road out of {town}.")
-
-
 def build_road(region: int) -> Room:
-    """The long road arriving at region ``region`` from the cave before it.
+    """The long road arriving at hold ``region`` from the cave before it.
 
-    Roads sit just west of their town and are quiet places -- no danger, but a
+    Roads sit just west of their hold and are quiet places -- no danger, but a
     likely spot to meet someone else walking them.
     """
     spec = region_by_index(region)
@@ -220,33 +174,16 @@ def build_road(region: int) -> Room:
 
     return Room(
         key=keys["road"],
-        name=_road_name(region),
-        description=_road_description(region, spec["town"], previous["town"]),
+        name=spec["road_name"],
+        description=spec["road_description"].format(
+            town=spec["town"], previous=previous["town"]
+        ),
         x=spec["x"] - 3,
         y=0,
-        label="Rd" + str(region),
+        label=f"Rd{region}",
         exits={"east": keys["square"]},
         region=region,
     )
-
-
-def _road_name(region: int) -> str:
-    return {2: "The Long Road East", 3: "The Climbing Road"}.get(region, "The Road")
-
-
-def _road_description(region: int, town: str, previous: str) -> str:
-    return {
-        2: (
-            f"Days of walking behind you, and {previous} far out of sight. The "
-            f"land here is grey and warm underfoot. {town} waits east, its "
-            "chimneys smudging the sky."
-        ),
-        3: (
-            f"The road climbs, and keeps climbing. Behind you the ash country; "
-            f"ahead, {town}, white-roofed and half-buried, at the edge of the "
-            "permanent snow."
-        ),
-    }.get(region, f"The road to {town}.")
 
 
 def build_world(dungeon_seed: int = DEFAULT_DUNGEON_SEED) -> dict[str, Room]:
