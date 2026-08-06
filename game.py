@@ -19,6 +19,7 @@ import os
 import random
 from dataclasses import asdict, replace
 
+import cheats
 import legacy as legacy_rules
 import saveload
 from content import (
@@ -95,6 +96,11 @@ class Game:
         self.legacy = legacy if legacy is not None else Legacy()
         self.legacy_path = legacy_path
         self.running = True
+        # Debug console, opened by typing the word. Off by default, never
+        # saved, and its verbs live outside parser.COMMANDS so the
+        # command-parity invariant holds either way.
+        self.cheats_on = False
+        self.godmode = False
         self.message = ""
         # Set when a run ends: a full screen the loop shows, and pauses on,
         # before play resumes. Empty at every other moment.
@@ -240,6 +246,11 @@ class Game:
             f"Blood {paint(str(vials), 'bright_red' if vials else 'dim')}   "
             f"Echoes {self.legacy.echoes}   Relics {len(player.relics)}"
         ))
+        if self.cheats_on:
+            print(center(paint(
+                f"cheats on -- type CHEATS for the list, {cheats.WORD} to stop",
+                "bright_magenta",
+            )))
         print(rule("="))
 
         if self.settings.show_map:
@@ -546,6 +557,9 @@ class Game:
         else:
             damage, critical = roll_damage(enemy.damage)
             opener = "A vicious blow! " if critical else ""
+
+        if self.godmode:
+            return f"The {enemy.name} strikes, and it does not matter."
 
         incoming = max(1, damage - self.player.defense())
         guarded = ""
@@ -1198,7 +1212,16 @@ class Game:
         }
 
     def handle_command(self, text: str) -> None:
-        """Parse input and dispatch it to the correct game action."""
+        """Parse input and dispatch it to the correct game action.
+
+        Cheat verbs are tried first and never reach the parser, so turning the
+        debug console on cannot shadow or break a real command.
+        """
+        cheated = cheats.handle(self, text)
+        if cheated is not None:
+            self.say(*cheated)
+            return
+
         verb, target, error = parse_command(
             text,
             min_command_prefix=self.settings.min_command_prefix,

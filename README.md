@@ -250,6 +250,37 @@ scrolls as you move, so the display never grows. Corridors running off the edge
 are drawn as stubs, and `(map continues: ...)` names the directions where
 explored rooms lie off-screen.
 
+## Cheats, for testing
+
+Type **`topkek`** at the prompt to open a debug console. Type it again to close
+it. Cheats are never saved, and their verbs live outside the normal command
+table, so turning them on cannot shadow or break a real command.
+
+Once on, the screen says so and these work from anywhere:
+
+| | |
+|---|---|
+| `give <item\|all>` | Any item — read **live** from the registry, so it never goes stale. `give` alone lists everything. |
+| `tp <where>` | `boss1`–`boss3`, `town1`–`town3`, `shrine`, `forge`, `market`, `inn`, or any raw room key. |
+| `hp <n\|max>` / `maxhp <n>` | Set current or maximum health. |
+| `level <n>` | Jump to a level, applying every level-up on the way. |
+| `gold <n>` / `echoes <n>` | Set coin, or echoes for testing the shrine. |
+| `relic <name>` | Grant a relic permanently, as a boss kill would. |
+| `spawn <tier>` | Put an enemy here at a tier you choose. |
+| `wound <pct>` | Set the enemy's health % — `wound 20` to test `feed`. |
+| `windup` | Force a telegraph, to test `guard`. |
+| `kill` | Remove what's here, no rewards. |
+| `chest <tier>` / `trader` | Drop a chest or a trader here. |
+| `reveal` | Discover the whole map. |
+| `god` | Take no damage. |
+| `where` | Dump the room's raw state and the dungeon seed. |
+| `cheats` | Show the list again. |
+
+`give` and `tp` both build their options from the game in front of them — the
+item catalogue comes straight from `content.ITEMS` and the teleport list is
+derived from the world, so anything you add shows up without being registered
+in two places.
+
 ## Commands
 
 | Command | Aliases | What it does |
@@ -313,6 +344,7 @@ settings set min_command_prefix 2     # change a number (1-10)
 | `content.py` | Items, themes, bestiaries, shops, traders, rolls. |
 | `map_render.py` | Draws the ASCII map camera. |
 | `parser.py` | Turns typed text into commands. |
+| `cheats.py` | The debug console (see below). |
 | `saveload.py` | Saves, the Legacy file, scrambling, version tolerance. |
 | `ui.py` | Terminal helpers and the big ASCII banners. |
 | `testkit.py` | Shared test scaffolding (not collected: unittest globs `test*.py`). |
