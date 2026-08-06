@@ -280,3 +280,18 @@ and damage rolls all follow from it:
 ```bash
 GAME_SEED=7 python main.py
 ```
+
+## Licence
+
+**All rights reserved.** © 2026 sudokek.
+
+The source is public so that it can be read, but **no licence is granted**: you
+may not use, copy, modify, or redistribute it, in whole or in part, without
+written permission. Reading it, learning from it, and asking questions about it
+are all welcome — shipping it is not.
+
+This is deliberate rather than an oversight. A commercial release may follow, so
+the rights are being kept open. (GitHub's own terms still allow viewing and
+forking within GitHub; nothing beyond that is permitted.)
+
+If you want to use something here, ask.
