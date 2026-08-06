@@ -96,6 +96,9 @@ class Game:
         self.legacy_path = legacy_path
         self.running = True
         self.message = ""
+        # Set when a run ends: a full screen the loop shows, and pauses on,
+        # before play resumes. Empty at every other moment.
+        self.interlude: list[str] = []
         self.last_command = ""
         self.commands = self._build_commands()
         self.start_run()
@@ -143,8 +146,15 @@ class Game:
         ]
 
         self._save_legacy()
+
+        # Shown as a screen of its own before the next world is built. Without
+        # this the banner was queued as an ordinary message and drawn by the
+        # next redraw -- underneath a level-1 stat bar in Greyfen Square, so the
+        # payoff for a twenty-level run read as a footnote to a new one.
+        self.interlude = summary
+
         self.start_run()
-        self.say(*summary)
+        self.say("A new night, and the same road out of Greyfen.")
 
     def _save_legacy(self) -> None:
         """Persist the Legacy, if this game was given somewhere to put it."""
@@ -445,7 +455,7 @@ class Game:
         lines.extend(self._claim_relic(enemy.relic))
 
         if room.region >= FINAL_REGION:
-            self._win(lines)
+            self._win(enemy, lines)
             return
 
         lines.append("")
@@ -471,9 +481,19 @@ class Game:
             return []
 
         relic = make_item(name)
+
+        # Relics are carried, not re-earned. new_player already folded every
+        # relic in the Legacy into the bonus_* fields at the start of this run,
+        # so applying it again on a re-kill made every replay quietly stronger
+        # than the Legacy screen claimed.
+        if name in self.legacy.relics:
+            return [
+                f"The {relic.name} you already carry answers the corpse.",
+                "  Nothing new comes loose.",
+            ]
+
         self.player.relics.append(relic)
-        if name not in self.legacy.relics:
-            self.legacy.relics.append(name)
+        self.legacy.relics.append(name)
         self._apply_bonus(relic.effect, relic.power)
         self._save_legacy()
 
@@ -595,16 +615,21 @@ class Game:
         )
         self.end_run(victory=False, epitaph=epitaph)
 
-    def _win(self, lines: list[str]) -> None:
-        """End the run in victory -- the only ending this world has."""
+    def _win(self, enemy, lines: list[str]) -> None:
+        """End the run in victory -- the only ending this world has.
+
+        The villain is named from the thing that actually died. Hard-coding it
+        is how the ending came to announce "the Sunless King", a boss this game
+        has not had since the reskin.
+        """
         epitaph = "\n".join(
             lines
             + [
                 "",
                 *banner("YOU WIN"),
                 "",
-                "The Sunless King is dead, and the deep is quiet for the first",
-                "time in living memory. You climb back toward the light.",
+                f"The {enemy.name.title()} is dead, and the deep is quiet for the",
+                "first time in living memory. You climb back toward the light.",
             ]
         )
         self.end_run(victory=True, epitaph=epitaph)
@@ -1149,6 +1174,20 @@ class Game:
 
         action(target)
 
+    def _show_interlude(self) -> None:
+        """Draw the end of a run as its own screen, and wait to be read."""
+        if self.settings.auto_clear:
+            clear_screen()
+        print(rule("="))
+        for line in self.interlude:
+            print(line)
+        print(rule("="))
+        self.interlude = []
+        try:
+            input("\nPress Enter to rise again. ")
+        except (EOFError, KeyboardInterrupt):
+            self.running = False
+
     def run(self) -> None:
         """Start the game and keep reading commands until quit."""
         self.render()
@@ -1171,6 +1210,9 @@ class Game:
                 self.last_command = command
 
             self.handle_command(command)
+
+            if self.interlude:
+                self._show_interlude()
 
             # One redraw per command, here and nowhere else.
             if self.running:

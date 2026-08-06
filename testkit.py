@@ -13,11 +13,22 @@ import io
 import os
 import tempfile
 import unittest
+from unittest.mock import patch
 
 import ui
 from game import Game
 from models import Legacy, Settings
 from world import build_world
+
+def strikes():
+    """Stop enemies winding up, so a struck player is struck deterministically.
+
+    Ordinary enemies telegraph a quarter of the time, and a wind-up costs them
+    the turn. Any test that lets an enemy act and then asserts on the damage,
+    the death, or the run counter is asserting on a coin flip without this.
+    """
+    return patch("game.roll", return_value=0.99)
+
 
 # How many generated worlds the invariant tests sweep. High enough to catch a
 # layout bug, low enough that the suite still runs in seconds.

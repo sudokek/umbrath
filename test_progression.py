@@ -10,7 +10,7 @@ import saveload
 from content import FINAL_REGION, REGIONS, THEMES, make_trader
 import testkit
 from game import Game
-from testkit import TempFileMixin, make_game
+from testkit import TempFileMixin, make_game, strikes
 from models import Enemy, Legacy
 from world import build_world
 
@@ -169,7 +169,25 @@ class VictoryTests(unittest.TestCase):
 
         self.assertEqual(game.legacy.victories, 1)
         self.assertEqual(game.player.location, "square")  # a new run began
-        self.assertIn("Sunless King is dead", game.message)
+
+        # Regression: the ending announced "the Sunless King", a boss this game
+        # has not had since the reskin -- and this assertion pinned the wrong
+        # name in place. It now reads the villain from the thing that died.
+        ending = "\n".join(game.interlude)
+        self.assertIn("Pale King is dead", ending)
+        self.assertNotIn("Sunless", ending)
+
+    def test_the_ending_names_the_boss_that_was_actually_killed(self):
+        from content import THEMES, REGIONS
+
+        game = make_game()
+        final = vault_of(game, FINAL_REGION)
+        boss = final.enemies[0]
+        game.player.location = final.key
+        game.player.bonus_attack = 10_000
+        game.attack_target("")
+
+        self.assertIn(boss.name.title(), "\n".join(game.interlude))
 
 
 class EchoTests(unittest.TestCase):
@@ -193,7 +211,9 @@ class EchoTests(unittest.TestCase):
         game = make_game()
         game.player.hp = 1
         game.current_room().enemies.append(Enemy("rat", hp=99, damage=99))
-        with patch("game.roll_damage", return_value=(1, False)):
+        # The rat must swing rather than wind up, or it never kills anyone and
+        # this test passes or fails on a die roll.
+        with patch("game.roll_damage", return_value=(1, False)), strikes():
             game.attack_target("")
         self.assertEqual(game.legacy.runs, 1)
         self.assertGreater(game.legacy.echoes, 0)

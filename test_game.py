@@ -6,13 +6,11 @@ from unittest.mock import patch
 import parser as command_parser
 from content import make_item
 from game import REST_COST
-from testkit import capture, make_game
+from testkit import capture, make_game, strikes
 from models import Enemy
 
-# Enemies sometimes wind up instead of striking, which costs them the turn. Any
-# test asserting an exact HP after being hit has to pin that roll, or it is
-# asserting on a coin flip.
-STRIKES = patch("game.roll", return_value=0.99)
+# Enemies telegraph a quarter of the time; see testkit.strikes.
+STRIKES = strikes()
 
 
 class DispatchTests(unittest.TestCase):
@@ -131,8 +129,11 @@ class CombatTests(unittest.TestCase):
         self.assertEqual(self.game.player.level, 1)
         self.assertEqual(self.game.player.gold, 20)
         self.assertEqual(self.game.player.hp, self.game.player.max_hp)
-        self.assertIn("finishes you in the dark", self.game.message)
-        self.assertIn("Run 1:", self.game.message)
+        # The epitaph is its own screen now, not a line under the new run.
+        epitaph = "\n".join(self.game.interlude)
+        self.assertIn("finishes you in the dark", epitaph)
+        self.assertIn("Run 1:", epitaph)
+        self.assertIn("A new night", self.game.message)
 
     def test_death_banks_echoes_for_the_next_run(self):
         self.game.player.hp = 1
