@@ -898,9 +898,6 @@ class Game:
         """Buy from a shop, a shrine, or a wandering trader."""
         room = self.current_room()
 
-        if room.chest and not room.chest.opened:
-            print(paint(f"A {room.chest.name} sits here, shut. (OPEN it.)", "bright_yellow"))
-
         if room.shrine:
             self._buy_blessing(raw_target)
             return
@@ -1165,10 +1162,14 @@ class Game:
             self.say(get_settings_help_text())
 
     def quit_game(self) -> None:
-        """Stop the main loop."""
+        """Stop the main loop.
+
+        Deliberately silent: the session runs on the alternate screen buffer,
+        so anything printed here is torn down before it can be read. main.py
+        says goodbye once the real screen is back.
+        """
         self.running = False
         self._save_legacy()
-        print("Goodbye.")
 
     # -- dispatch & loop ---------------------------------------------------
 
@@ -1263,7 +1264,8 @@ class Game:
             try:
                 raw = input("\n> ")
             except (EOFError, KeyboardInterrupt):
-                print("\nGoodbye.")
+                # Silent: main.py says goodbye once the alternate screen buffer
+                # is gone and the player's own terminal is back.
                 self._save_legacy()
                 break
 

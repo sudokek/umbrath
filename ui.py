@@ -27,7 +27,16 @@ WIDTH = 62
 ANSI = re.compile(r"\x1b\[[0-9;]*m")
 
 # Escape sequence: erase the whole screen, then park the cursor at the top-left.
-CLEAR_SEQUENCE = "\033[2J\033[H"
+# Erase the screen, erase the *scrollback*, then home the cursor. The 3J is the
+# part that matters: without it "clearing" only pushes the old frame up out of
+# view, and every previous turn is still there to scroll back through.
+CLEAR_SEQUENCE = "\033[2J\033[3J\033[H"
+
+# The alternate screen buffer -- the same thing vim and less use. While it is
+# active the terminal has no scrollback at all, and leaving it puts back
+# whatever the player had on screen before the game started.
+ENTER_FULLSCREEN = "\033[?1049h"
+EXIT_FULLSCREEN = "\033[?1049l"
 
 
 def _enable_ansi() -> bool:
@@ -125,11 +134,40 @@ def glyph(name: str) -> str:
 
 
 def clear_screen() -> None:
-    """Clear the terminal without spawning a shell process each frame."""
+    """Clear the terminal, scrollback included, without spawning a shell."""
     if _ANSI_READY:
-        print(CLEAR_SEQUENCE, end="")
+        print(CLEAR_SEQUENCE, end="", flush=True)
     else:
         os.system("cls" if os.name == "nt" else "clear")
+
+
+_fullscreen = False
+
+
+def enter_fullscreen() -> None:
+    """Switch to the alternate screen buffer, if the terminal has one.
+
+    This is what actually makes old turns unreachable: on the alternate buffer
+    there is no scrollback to scroll, so a cleared frame is gone rather than
+    merely out of view. Safe to call twice.
+    """
+    global _fullscreen
+    if _ANSI_READY and not _fullscreen:
+        print(ENTER_FULLSCREEN, end="", flush=True)
+        _fullscreen = True
+        clear_screen()
+
+
+def exit_fullscreen() -> None:
+    """Return to the normal buffer, restoring whatever was on screen before.
+
+    Must run even when the game crashes, or the player is left on an empty
+    alternate buffer with no obvious way back.
+    """
+    global _fullscreen
+    if _ANSI_READY and _fullscreen:
+        print(EXIT_FULLSCREEN, end="", flush=True)
+        _fullscreen = False
 
 
 # --------------------------------------------------------------------------

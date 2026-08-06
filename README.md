@@ -28,6 +28,12 @@ Both are detected at startup and can be forced either way from **Options**
 (`color`, `line_drawing`). Layout is measured ignoring colour escapes, so the
 interface is exactly 62 columns wide however it is drawn.
 
+The game runs on the terminal's **alternate screen buffer** — the same thing
+`vim` and `less` use. There is no scrollback while you play, so a redrawn frame
+is genuinely gone rather than pushed up out of sight, and quitting hands your
+terminal back exactly as it was found. On a console without it, clearing still
+erases the scrollback explicitly.
+
 ## Running
 
 ```bash

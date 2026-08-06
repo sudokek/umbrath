@@ -7,7 +7,7 @@ and it must vanish cleanly on a terminal that cannot render it.
 import unittest
 
 import ui
-from testkit import DisplayMixin
+from testkit import DisplayMixin, capture
 from ui import WIDTH
 
 
@@ -158,6 +158,43 @@ class BannerTests(unittest.TestCase):
         lines = ui.banner("Zzz?")
         self.assertEqual(len(lines), 1)
         self.assertIn("ZZZ?", lines[0])
+
+
+class ScrollbackTests(DisplayMixin, unittest.TestCase):
+    """A cleared frame must be gone, not merely pushed out of view."""
+
+    def setUp(self):
+        self.force_display()
+        # Leaving the buffer prints an escape; keep it out of the report.
+        self.addCleanup(lambda: capture(ui.exit_fullscreen))
+
+    def test_clearing_erases_the_scrollback_too(self):
+        # 2J alone only scrolls the old frame up, leaving every previous turn
+        # reachable with the scroll wheel. 3J is the part that deletes it.
+        self.assertIn("[2J", ui.CLEAR_SEQUENCE)
+        self.assertIn("[3J", ui.CLEAR_SEQUENCE)
+        self.assertIn("[H", ui.CLEAR_SEQUENCE)
+
+    def test_clear_screen_emits_the_sequence(self):
+        self.assertIn(ui.CLEAR_SEQUENCE, capture(ui.clear_screen))
+
+    def test_fullscreen_round_trips(self):
+        ui.exit_fullscreen()
+        entered = capture(ui.enter_fullscreen)
+        self.assertIn(ui.ENTER_FULLSCREEN, entered)
+
+        left = capture(ui.exit_fullscreen)
+        self.assertIn(ui.EXIT_FULLSCREEN, left)
+
+    def test_entering_twice_only_switches_once(self):
+        ui.exit_fullscreen()
+        capture(ui.enter_fullscreen)
+        again = capture(ui.enter_fullscreen)
+        self.assertNotIn(ui.ENTER_FULLSCREEN, again)
+
+    def test_leaving_when_not_in_it_does_nothing(self):
+        ui.exit_fullscreen()
+        self.assertNotIn(ui.EXIT_FULLSCREEN, capture(ui.exit_fullscreen))
 
 
 if __name__ == "__main__":

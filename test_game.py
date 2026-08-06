@@ -630,3 +630,35 @@ class RegroupTests(unittest.TestCase):
         game.current_room().enemies.append(enemy)
         game._regroup(game.current_room())
         self.assertEqual(enemy.hp, 4)
+
+
+class RedrawDisciplineTests(unittest.TestCase):
+    """Only render() may draw, or old frames survive on screen."""
+
+    def test_no_action_prints_outside_render(self):
+        # Regression: a chest cue was pasted into buy_item as well as render,
+        # so buying printed a line that the next redraw could not clear.
+        import ast
+        import pathlib
+
+        source = pathlib.Path(__file__).parent / "game.py"
+        tree = ast.parse(source.read_text(encoding="utf-8"))
+
+        allowed = {"render", "_show_interlude", "run"}
+        offenders = []
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            if node.name in allowed:
+                continue
+            for inner in ast.walk(node):
+                if (
+                    isinstance(inner, ast.Call)
+                    and isinstance(inner.func, ast.Name)
+                    and inner.func.id == "print"
+                ):
+                    offenders.append(f"{node.name}:{inner.lineno}")
+
+        self.assertFalse(
+            offenders, f"print() outside the redraw: {offenders}"
+        )
