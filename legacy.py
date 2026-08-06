@@ -8,7 +8,7 @@ permanent record into the numbers a new Player begins with.
 
 import chargen
 from content import BLESSINGS, ITEMS, make_item
-from models import BASE_MAX_HP, Legacy, Player
+from models import BASE_MAX_HP, HP_PER_LEVEL, Legacy, Player
 
 # Echoes are the currency of dying. A run always leaves at least one behind, so
 # even a disastrous attempt buys a sliver of the next one.
@@ -26,6 +26,34 @@ def echoes_earned(bosses_killed: int, region_reached: int, victory: bool) -> int
     if victory:
         total += ECHOES_FOR_VICTORY
     return total
+
+
+# What survives a death, and the ceiling on it.
+#
+# The point of a head start is to skip re-proving Greyfen, which you have
+# already proved. The point of the cap is that holds two and three -- where runs
+# actually end -- must stay exactly as dangerous on run twenty as on run two.
+# So both inheritances plateau: they are generous early and irrelevant later.
+INHERITED_COIN_SHARE = 0.25
+INHERITED_COIN_CAP = 200
+
+INHERITED_LEVEL_SHARE = 0.34
+INHERITED_LEVEL_CAP = 6
+
+
+def inherited_coin(legacy: Legacy) -> int:
+    """Coin carried out of the last run, capped."""
+    return min(INHERITED_COIN_CAP, int(legacy.hoard * INHERITED_COIN_SHARE))
+
+
+def inherited_level(legacy: Legacy) -> int:
+    """The level a new run starts at, capped.
+
+    Deliberately a third of your best and never above ``INHERITED_LEVEL_CAP``:
+    enough to walk through the Barrow Warrens without re-grinding them, nowhere
+    near enough to matter against the Cinder Warden.
+    """
+    return max(1, min(INHERITED_LEVEL_CAP, int(legacy.best_level * INHERITED_LEVEL_SHARE)))
 
 
 def bonuses(legacy: Legacy) -> dict[str, int]:
@@ -70,7 +98,15 @@ def new_player(legacy: Legacy) -> Player:
     # Never let an origin's HP penalty leave a character unable to take a hit.
     player.max_hp = max(5, BASE_MAX_HP + totals["max_hp"])
     player.hp = player.max_hp
-    player.gold = Player.gold + totals["gold"]
+    player.gold = Player.gold + totals["gold"] + inherited_coin(legacy)
+
+    # Start at a fraction of the best level ever reached, capped. Levelling up
+    # is what grants the HP and damage, so this is applied by living through
+    # those levels rather than by assigning a number.
+    for _ in range(inherited_level(legacy) - 1):
+        player.level += 1
+        player.max_hp += HP_PER_LEVEL
+    player.hp = player.max_hp
 
     # Relics are carried, not re-earned: they show up in hand at the start.
     player.relics = [make_item(name) for name in legacy.relics if name in ITEMS]

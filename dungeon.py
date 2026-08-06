@@ -25,10 +25,10 @@ more rewarding.
 
 import random
 
-from content import make_boss, make_item, theme_style
+from content import CHEST_NAMES, make_boss, make_item, roll_hoard, theme_style
 # Labels have to fit the renderer's box, so it owns the width.
 from map_render import LABEL_WIDTH
-from models import Room
+from models import Chest, Room
 
 OPPOSITE = {"north": "south", "south": "north", "east": "west", "west": "east"}
 STEPS = {"north": (0, 1), "south": (0, -1), "east": (1, 0), "west": (-1, 0)}
@@ -40,9 +40,13 @@ DEFAULT_ROOM_COUNT = 14
 # they still have shape worth learning.
 LOOP_CHANCE = 0.28
 
-# Chance any given room holds loot. Tuned with the rest of the economy so a
-# player who clears a hold completely can afford that hold's gear.
+# Chance any given room holds loose loot. Tuned with the rest of the economy so
+# a player who clears a hold completely can afford that hold's gear.
 LOOT_CHANCE = 0.55
+
+# Chests are rarer than loose loot and worth walking for: they hold several
+# rolls at once, and the deeper the room the more they hold.
+CHEST_CHANCE = 0.16
 
 
 def _danger_for_depth(depth: int) -> int:
@@ -166,6 +170,7 @@ def generate_cave(
 
     _add_loops(rooms, taken, entrance_key, rng)
     _scatter_loot(rooms, depths, entrance_key, style, rng)
+    _place_chests(rooms, entrance_key, region, rng)
     _build_vault(rooms, depths, entrance_key, style, prefix, theme, onward)
     return rooms
 
@@ -208,6 +213,29 @@ def _scatter_loot(
         candidates = [name for min_depth, name in style["loot"] if min_depth <= depth]
         if candidates and rng.random() < LOOT_CHANCE:
             room.items.append(make_item(rng.choice(candidates)))
+
+
+def _place_chests(
+    rooms: dict[str, Room],
+    entrance_key: str,
+    region: int,
+    rng: random.Random,
+) -> None:
+    """Scatter chests through the cave, holding more the deeper they sit.
+
+    Contents are rolled at generation time from the drop table, using the
+    room's own danger tier -- so a chest three rooms in and a chest at the
+    bottom are different prizes, and a chest is worth the walk to reach it.
+    """
+    for key, room in rooms.items():
+        if key == entrance_key or room.danger == 0:
+            continue
+        if rng.random() >= CHEST_CHANCE:
+            continue
+        room.chest = Chest(
+            name=rng.choice(CHEST_NAMES),
+            contents=roll_hoard(region, room.danger, count=1 + room.danger),
+        )
 
 
 def _reachable(rooms: dict[str, Room], start: str, goal: str) -> bool:

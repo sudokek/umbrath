@@ -133,6 +133,8 @@ class Game:
         self.legacy.runs += 1
         self.legacy.echoes += earned
         self.legacy.best_region = max(self.legacy.best_region, self.region_reached)
+        self.legacy.best_level = max(self.legacy.best_level, self.player.level)
+        self.legacy.hoard = self.player.gold
         if victory:
             self.legacy.victories += 1
 
@@ -143,6 +145,10 @@ class Game:
             f"killed {self.bosses_killed} boss(es).",
             f"You carry {earned} echo(es) out of it. ({self.legacy.echoes} saved.)",
             "Spend them at the Shrine of Echoes, below the Greyfen inn.",
+            "",
+            f"The grave keeps most of it. You rise at level "
+            f"{legacy_rules.inherited_level(self.legacy)} with "
+            f"{legacy_rules.inherited_coin(self.legacy)} coin.",
         ]
 
         self._save_legacy()
@@ -248,6 +254,9 @@ class Game:
 
         if self.settings.show_room_items and room.items:
             print("You see:", paint(", ".join(i.name for i in room.items), "green"))
+
+        if room.chest and not room.chest.opened:
+            print(paint(f"A {room.chest.name} sits here, shut. (OPEN it.)", "bright_yellow"))
 
         if room.shrine:
             print("Blessings:", ", ".join(
@@ -692,6 +701,37 @@ class Game:
 
     # -- items & gear ------------------------------------------------------
 
+    def open_chest(self) -> None:
+        """Open the chest here, tipping everything in it onto the floor.
+
+        Contents were rolled when the cave was built, from the drop table at
+        this room's danger -- so what is inside is worth exactly as much as the
+        walk it took to reach it.
+        """
+        room = self.current_room()
+        chest = room.chest
+
+        if chest is None:
+            self.say("There is nothing here to open.")
+            return
+        if chest.opened:
+            self.say(f"The {chest.name} is already open, and already empty.")
+            return
+        if room.enemies:
+            self.say(f"Not with the {room.enemies[0].name} still standing.")
+            return
+
+        chest.opened = True
+        room.items.extend(chest.contents)
+        haul = [item.name for item in chest.contents]
+        chest.contents = []
+
+        self.say(
+            f"You force the {chest.name}.",
+            "Inside: " + (", ".join(haul) if haul else "nothing but dust"),
+            "(TAKE what you want.)" if haul else None,
+        )
+
     def take_item(self, raw_target: str) -> None:
         """Pick up an item from the current room."""
         room = self.current_room()
@@ -843,6 +883,9 @@ class Game:
     def buy_item(self, raw_target: str) -> None:
         """Buy from a shop, a shrine, or a wandering trader."""
         room = self.current_room()
+
+        if room.chest and not room.chest.opened:
+            print(paint(f"A {room.chest.name} sits here, shut. (OPEN it.)", "bright_yellow"))
 
         if room.shrine:
             self._buy_blessing(raw_target)
@@ -1130,6 +1173,7 @@ class Game:
             "look": lambda target: None,  # the redraw below is the whole action
             "examine": self.examine_target,
             "take": self.take_item,
+            "open": lambda target: self.open_chest(),
             "drop": self.drop_item,
             "use": self.use_item,
             "equip": self.equip_item,

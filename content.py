@@ -51,6 +51,12 @@ ITEMS: dict[str, Item] = {
              kind="armor", power=1, price=30),
         Item("gravemail", "Rusted rings off a dead soldier. Blocks 3 damage.",
              kind="armor", power=3, price=100),
+        Item("rib-hook", "Barbed, and hard to pull back out. +4 damage.",
+             kind="weapon", power=4, price=32),
+        Item("mourning blade", "Thin, and it whistles. +7 damage.",
+             kind="weapon", power=7, price=78),
+        Item("cerement wrap", "Wound tight over the ribs. Blocks 2 damage.",
+             kind="armor", power=2, price=58),
         # -- tier 2: Ashmoor ---------------------------------------------
         Item("wight blade", "Cold to hold, colder to be hit by. +14 damage.",
              kind="weapon", power=14, price=190),
@@ -60,6 +66,12 @@ ITEMS: dict[str, Item] = {
              kind="armor", power=6, price=210),
         Item("scale shroud", "Overlapping black scales. Blocks 9 damage.",
              kind="armor", power=9, price=360),
+        Item("ashen pick", "Balanced for one hand and a bad mood. +11 damage.",
+             kind="weapon", power=11, price=140),
+        Item("slag cleaver", "Heavy as guilt. +16 damage.",
+             kind="weapon", power=16, price=245),
+        Item("cinder mail", "Fire-blacked rings. Blocks 7 damage.",
+             kind="armor", power=7, price=265),
         # -- tier 3: Wintermourn -----------------------------------------
         Item("bloodfang", "It drinks before you do. +28 damage.",
              kind="weapon", power=28, price=700),
@@ -69,6 +81,25 @@ ITEMS: dict[str, Item] = {
              kind="armor", power=14, price=780),
         Item("carrion ward", "Warded against the pale cold. Blocks 19 damage.",
              kind="armor", power=19, price=1250),
+        Item("hoarfrost spear", "Cold enough to stick to the hand. +22 damage.",
+             kind="weapon", power=22, price=520),
+        Item("widow's edge", "It was never meant to be put down. +32 damage.",
+             kind="weapon", power=32, price=890),
+        Item("glacier harness", "Ice-plate over dead leather. Blocks 16 damage.",
+             kind="armor", power=16, price=940),
+        # -- valuables: no use but their price ----------------------------
+        Item("tarnished locket", "Someone's face, worn away. Worth coin.",
+             kind="valuable", price=25),
+        Item("grave-silver", "Coins left for a ferryman who never came.",
+             kind="valuable", price=60),
+        Item("obsidian shard", "Volcanic glass, knapped and abandoned.",
+             kind="valuable", price=110),
+        Item("reliquary tooth", "Not yours. Someone paid for this once.",
+             kind="valuable", price=210),
+        Item("frozen tear", "It has not melted, and it will not.",
+             kind="valuable", price=380),
+        Item("crown fragment", "A shard of something that ruled here.",
+             kind="valuable", price=650),
         # -- relics: boss drops, kept forever -----------------------------
         Item(
             "gaunt fang",
@@ -322,8 +353,8 @@ REGIONS = [
         "theme": "barrow",
         "x": 0,
         "rooms": 14,
-        "gear": ["bone dagger", "grave sword", "barrow axe",
-                 "tattered shroud", "gravemail"],
+        "gear": ["bone dagger", "rib-hook", "grave sword", "mourning blade",
+                 "barrow axe", "tattered shroud", "cerement wrap", "gravemail"],
         "potions": ["blood vial", "vitae flask"],
     },
     {
@@ -344,7 +375,8 @@ REGIONS = [
         "theme": "ember",
         "x": 60,
         "rooms": 18,
-        "gear": ["wight blade", "crypt maul", "barrow plate", "scale shroud"],
+        "gear": ["ashen pick", "wight blade", "slag cleaver", "crypt maul",
+                 "cinder mail", "barrow plate", "scale shroud"],
         "potions": ["blood vial", "vitae flask", "heart's blood"],
     },
     {
@@ -365,7 +397,8 @@ REGIONS = [
         "theme": "rime",
         "x": 120,
         "rooms": 22,
-        "gear": ["bloodfang", "doom glaive", "abyssal plate", "carrion ward"],
+        "gear": ["hoarfrost spear", "bloodfang", "widow's edge", "doom glaive",
+                 "glacier harness", "abyssal plate", "carrion ward"],
         "potions": ["vitae flask", "heart's blood", "ichor of ages"],
     },
 ]
@@ -453,6 +486,89 @@ def find_gold(tier: int, region: int = 1) -> int:
     """Return a random amount of loose coin found while exploring."""
     scale = GOLD_BY_REGION[min(max(region, 1), 3)]
     return random.randint(3 * tier, 8 * tier) * scale
+
+
+# --------------------------------------------------------------------------
+# The drop table
+# --------------------------------------------------------------------------
+
+# One table behind every piece of loot in the game: scattered cave items, chest
+# contents, and what a trader happens to be carrying.
+#
+# Each row is (item name, weight, first hold, first tier). A row is eligible
+# once you have reached its hold *and* the room is at least that dangerous, so
+# depth and progress both gate what can appear. Weight is relative within
+# whatever is eligible -- blood is common, the best weapon in a hold is not.
+DROPS: list[tuple[str, int, int, int]] = [
+    # name                     weight  hold  tier
+    ("blood vial",                 30,    1,    1),
+    ("tarnished locket",           18,    1,    1),
+    ("bone dagger",                14,    1,    1),
+    ("cerement wrap",              12,    1,    1),
+    ("tattered shroud",            12,    1,    1),
+    ("rib-hook",                   12,    1,    2),
+    ("grave-silver",               12,    1,    2),
+    ("vitae flask",                18,    1,    2),
+    ("grave sword",                10,    1,    2),
+    ("mourning blade",              8,    1,    3),
+    ("gravemail",                   8,    1,    3),
+    ("barrow axe",                  4,    1,    3),
+
+    ("vitae flask",                24,    2,    1),
+    ("obsidian shard",             16,    2,    1),
+    ("ashen pick",                 12,    2,    1),
+    ("heart's blood",              16,    2,    2),
+    ("wight blade",                10,    2,    2),
+    ("cinder mail",                10,    2,    2),
+    ("reliquary tooth",            10,    2,    2),
+    ("barrow plate",                8,    2,    3),
+    ("slag cleaver",                7,    2,    3),
+    ("scale shroud",                5,    2,    3),
+    ("crypt maul",                  3,    2,    3),
+
+    ("heart's blood",              22,    3,    1),
+    ("frozen tear",                16,    3,    1),
+    ("hoarfrost spear",            12,    3,    1),
+    ("ichor of ages",              14,    3,    2),
+    ("crown fragment",             10,    3,    2),
+    ("bloodfang",                   8,    3,    2),
+    ("glacier harness",             8,    3,    2),
+    ("abyssal plate",               6,    3,    3),
+    ("widow's edge",                5,    3,    3),
+    ("carrion ward",                4,    3,    3),
+    ("doom glaive",                 2,    3,    3),
+]
+
+
+def eligible_drops(region: int, tier: int) -> list[tuple[str, int]]:
+    """Every drop that can appear at this hold and danger, with its weight."""
+    return [
+        (name, weight)
+        for name, weight, min_region, min_tier in DROPS
+        if min_region <= region and min_tier <= tier
+    ]
+
+
+def roll_loot(region: int = 1, tier: int = 1) -> Item:
+    """Draw one item from the drop table, weighted, for this depth."""
+    rows = eligible_drops(region, tier) or eligible_drops(1, 1)
+    names = [name for name, _weight in rows]
+    weights = [weight for _name, weight in rows]
+    return make_item(random.choices(names, weights=weights, k=1)[0])
+
+
+CHEST_NAMES = [
+    "iron-bound chest",
+    "grave-cache",
+    "sealed coffer",
+    "looter's stash",
+    "warped strongbox",
+]
+
+
+def roll_hoard(region: int = 1, tier: int = 1, count: int = 3) -> list[Item]:
+    """Draw several items for a chest. Deeper chests hold more."""
+    return [roll_loot(region, tier) for _ in range(max(1, count))]
 
 
 # --------------------------------------------------------------------------
@@ -566,11 +682,37 @@ def roll_damage(base: int) -> tuple[int, bool]:
 # --------------------------------------------------------------------------
 
 
+# How many pieces a forge puts out at once. Fewer than the tier holds, so two
+# runs shop differently, and enough that there is always a choice to make.
+FORGE_STOCK = 5
+
+
 def make_shop_potions(region: int = 1) -> list[Item]:
-    """Stock for a hold's night market."""
+    """Stock for a hold's night market. Blood is never rationed."""
     return [make_item(name) for name in region_by_index(region)["potions"]]
 
 
 def make_shop_gear(region: int = 1) -> list[Item]:
-    """Stock for a hold's charnel forge."""
-    return [make_item(name) for name in region_by_index(region)["gear"]]
+    """Stock for a hold's charnel forge, drawn fresh for this run.
+
+    A forge shows a subset of its tier rather than the whole catalogue, so what
+    is on the wall is part of what makes one run differ from the next. It is
+    guaranteed to carry at least one weapon and one piece of armour: a hold that
+    cannot arm you is a hold that cannot be played through.
+    """
+    pool = [make_item(name) for name in region_by_index(region)["gear"]]
+    weapons = [item for item in pool if item.kind == "weapon"]
+    armour = [item for item in pool if item.kind == "armor"]
+
+    stock = []
+    if weapons:
+        stock.append(random.choice(weapons))
+    if armour:
+        stock.append(random.choice(armour))
+
+    rest = [item for item in pool if item not in stock]
+    random.shuffle(rest)
+    stock += rest[: max(0, FORGE_STOCK - len(stock))]
+
+    # Cheapest first, so the wall reads as a ladder.
+    return sorted(stock, key=lambda item: item.price)

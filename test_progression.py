@@ -88,14 +88,34 @@ class WorldShapeTests(unittest.TestCase):
         world = build_world(4)
         self.assertEqual(self._onward_exits(world, REGIONS[-1]["index"]), [])
 
-    def test_each_town_stocks_its_own_tier_of_gear(self):
+    def test_each_town_stocks_from_its_own_tier_of_gear(self):
+        # A forge shows a subset of its tier, rolled per run, so two runs shop
+        # differently. What it may never do is stock another hold's gear.
         for spec in REGIONS:
             smithy = next(
                 room
                 for room in self.world.values()
                 if room.region == spec["index"] and room.shop and not room.can_sell
             )
-            self.assertEqual([i.name for i in smithy.shop], spec["gear"])
+            self.assertTrue(
+                {i.name for i in smithy.shop} <= set(spec["gear"]),
+                f"{spec['town']} stocks gear from another hold",
+            )
+
+    def test_every_forge_can_arm_you(self):
+        # A hold that cannot sell you a weapon and armour is a hold that cannot
+        # be played through, however the roll lands.
+        import random
+
+        from content import make_shop_gear
+
+        for spec in REGIONS:
+            for attempt in range(40):
+                random.seed(attempt)
+                stock = make_shop_gear(spec["index"])
+                kinds = {item.kind for item in stock}
+                self.assertIn("weapon", kinds, f"{spec['town']} seed {attempt}")
+                self.assertIn("armor", kinds, f"{spec['town']} seed {attempt}")
 
 
 class BossGateTests(unittest.TestCase):
@@ -351,3 +371,154 @@ class RunStateSaveTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class InheritanceTests(unittest.TestCase):
+    """What the grave gives back, and the ceiling that stops it compounding."""
+
+    def _legacy(self, best_level=1, hoard=0):
+        return Legacy(name="T", origin="graveborn",
+                      best_level=best_level, hoard=hoard)
+
+    def test_a_first_run_inherits_nothing(self):
+        fresh = self._legacy()
+        self.assertEqual(legacy_rules.inherited_level(fresh), 1)
+        self.assertEqual(legacy_rules.inherited_coin(fresh), 0)
+
+    def test_you_rise_with_a_third_of_your_best_level(self):
+        self.assertEqual(legacy_rules.inherited_level(self._legacy(best_level=9)), 3)
+
+    def test_you_rise_with_a_quarter_of_your_last_hoard(self):
+        self.assertEqual(legacy_rules.inherited_coin(self._legacy(hoard=400)), 100)
+
+    def test_both_inheritances_plateau(self):
+        # The whole point of the cap: run 20 must not start stronger than run 9.
+        rich = self._legacy(best_level=99, hoard=99_999)
+        self.assertEqual(
+            legacy_rules.inherited_level(rich), legacy_rules.INHERITED_LEVEL_CAP
+        )
+        self.assertEqual(
+            legacy_rules.inherited_coin(rich), legacy_rules.INHERITED_COIN_CAP
+        )
+
+    def test_the_head_start_is_spent_by_the_second_hold(self):
+        # Measured, not assumed: a maxed inheritance should walk through
+        # Greyfen and still be badly outmatched in Wintermourn.
+        cap = legacy_rules.INHERITED_LEVEL_CAP
+        fists = 2 + cap - 1
+        hp = 20 + 5 * (cap - 1)
+
+        def survives(town_index):
+            pool = THEMES[REGIONS[town_index]["theme"]]["enemies"][2]
+            enemy_hp = sum(row[1] for row in pool) / len(pool)
+            enemy_dmg = sum(row[2] for row in pool) / len(pool)
+            return (hp / enemy_dmg) > (enemy_hp / fists)
+
+        self.assertTrue(survives(0), "Greyfen should be walkable after a few runs")
+        self.assertFalse(survives(2), "Wintermourn must never be walkable at the cap")
+
+    def test_a_new_player_actually_starts_with_the_inheritance(self):
+        player = legacy_rules.new_player(self._legacy(best_level=9, hoard=400))
+        self.assertEqual(player.level, 3)
+        self.assertEqual(player.gold, 20 + 60 + 100)  # base + graveborn + inherited
+        self.assertEqual(player.hp, player.max_hp)
+
+    def test_gear_is_never_inherited(self):
+        player = legacy_rules.new_player(self._legacy(best_level=20, hoard=9_999))
+        self.assertIsNone(player.weapon)
+        self.assertIsNone(player.armor)
+
+
+class ChestTests(unittest.TestCase):
+    """Chests hold loot rolled for the depth they sit at."""
+
+    def _game_with_chest(self, danger=2):
+        from models import Chest
+        from content import roll_hoard
+
+        game = make_game()
+        game.player.location = "cave1"
+        room = game.current_room()
+        room.danger = danger
+        room.chest = Chest(name="test coffer", contents=roll_hoard(1, danger, 3))
+        return game, room
+
+    def test_opening_tips_the_contents_onto_the_floor(self):
+        game, room = self._game_with_chest()
+        expected = [item.name for item in room.chest.contents]
+        game.open_chest()
+        self.assertEqual([item.name for item in room.items], expected)
+        self.assertTrue(room.chest.opened)
+
+    def test_a_chest_can_only_be_opened_once(self):
+        game, room = self._game_with_chest()
+        game.open_chest()
+        game.open_chest()
+        self.assertIn("already open", game.message)
+
+    def test_opening_is_refused_while_something_is_alive(self):
+        game, room = self._game_with_chest()
+        room.enemies.append(Enemy("goblin", hp=5, max_hp=5))
+        game.open_chest()
+        self.assertFalse(room.chest.opened)
+        self.assertIn("still standing", game.message)
+
+    def test_opening_nothing_is_reported(self):
+        game = make_game()
+        game.open_chest()
+        self.assertIn("nothing here to open", game.message)
+
+    def test_deeper_chests_hold_more(self):
+        from content import roll_hoard
+
+        shallow = len(roll_hoard(1, 1, count=2))
+        deep = len(roll_hoard(3, 3, count=4))
+        self.assertGreater(deep, shallow)
+
+    def test_every_world_places_some_chests(self):
+        for seed in range(12):
+            world = build_world(seed)
+            chests = [room for room in world.values() if room.chest]
+            self.assertTrue(chests, f"seed {seed} generated no chests at all")
+
+    def test_chests_never_appear_in_a_safe_room(self):
+        for seed in range(12):
+            for room in build_world(seed).values():
+                if room.chest:
+                    self.assertGreater(room.danger, 0, room.key)
+
+
+class DropTableTests(unittest.TestCase):
+    """One weighted table behind every piece of loot."""
+
+    def test_depth_gates_what_can_appear(self):
+        from content import eligible_drops
+
+        shallow = {name for name, _w in eligible_drops(1, 1)}
+        deep = {name for name, _w in eligible_drops(3, 3)}
+        self.assertTrue(shallow < deep, "deeper should unlock strictly more")
+
+    def test_the_first_hold_cannot_drop_late_gear(self):
+        from content import eligible_drops
+
+        early = {name for name, _w in eligible_drops(1, 3)}
+        self.assertNotIn("doom glaive", early)
+        self.assertNotIn("carrion ward", early)
+
+    def test_every_drop_names_a_real_item(self):
+        from content import DROPS, ITEMS
+
+        for name, weight, region, tier in DROPS:
+            self.assertIn(name, ITEMS, name)
+            self.assertGreater(weight, 0, name)
+            self.assertIn(region, (1, 2, 3), name)
+            self.assertIn(tier, (1, 2, 3), name)
+
+    def test_rolling_always_returns_something_usable(self):
+        from content import roll_loot
+
+        for region in (1, 2, 3):
+            for tier in (1, 2, 3):
+                item = roll_loot(region, tier)
+                self.assertTrue(item.name)
+                self.assertGreater(item.price, 0)

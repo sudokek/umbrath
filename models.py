@@ -57,6 +57,15 @@ class Trader:
 
 
 @dataclass
+class Chest:
+    """A container waiting in the dark, holding loot rolled for its depth."""
+
+    name: str = "iron-bound chest"
+    contents: list[Item] = field(default_factory=list)
+    opened: bool = False
+
+
+@dataclass
 class Room:
     """Store all data for one location in the world.
 
@@ -82,6 +91,7 @@ class Room:
     inn: bool = False
     shrine: bool = False
     trader: Trader | None = None
+    chest: Chest | None = None
     # Which region (1-3) this room belongs to, and which cave theme styles it.
     region: int = 1
     theme: str = ""
@@ -176,6 +186,11 @@ class Legacy:
     # Blessing name -> how many times it has been bought.
     blessings: dict[str, int] = field(default_factory=dict)
     best_region: int = 1
+    # What the grave could not take: coin recovered from the last corpse, and
+    # the high-water mark of level reached. Both are capped when applied -- see
+    # legacy.INHERITED_*.
+    hoard: int = 0
+    best_level: int = 1
 
 
 @dataclass

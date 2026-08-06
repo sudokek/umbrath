@@ -123,12 +123,15 @@ class CombatTests(unittest.TestCase):
         with patch("game.roll_damage", return_value=(1, False)), STRIKES:
             self.game.attack_target("")
 
-        # The run is gone: fresh character, fresh world, back at the start.
+        # The run is gone: fresh world, back at the start, gear and progress
+        # surrendered -- but not everything. A third of the level reached and a
+        # quarter of the coin come back out of the grave with you.
         self.assertEqual(self.game.legacy.runs, runs_before + 1)
         self.assertEqual(self.game.player.location, "square")
-        self.assertEqual(self.game.player.level, 1)
-        self.assertEqual(self.game.player.gold, 20)
+        self.assertEqual(self.game.player.level, 2)   # died at 6
+        self.assertEqual(self.game.player.gold, 45)   # 20 base + 25 of 100
         self.assertEqual(self.game.player.hp, self.game.player.max_hp)
+        self.assertIsNone(self.game.player.weapon)    # the gear is gone
         # The epitaph is its own screen now, not a line under the new run.
         epitaph = "\n".join(self.game.interlude)
         self.assertIn("finishes you in the dark", epitaph)
@@ -320,13 +323,17 @@ class EconomyTests(unittest.TestCase):
     """Cover buying, selling, and resting."""
 
     def test_buying_deducts_gold_and_leaves_the_shop_stocked(self):
+        # A forge rolls its stock per run, so buy whatever it happens to have.
         game = make_game()
         game.player.location = "smithy"
-        game.player.gold = 100
-        game.buy_item("bone dagger")
-        self.assertEqual(game.player.gold, 80)
-        self.assertIn("bone dagger", [i.name for i in game.player.inventory])
-        self.assertIn("bone dagger", [i.name for i in game.current_room().shop])
+        game.player.gold = 10_000
+        ware = game.current_room().shop[0]
+
+        game.buy_item(ware.name)
+
+        self.assertEqual(game.player.gold, 10_000 - ware.price)
+        self.assertIn(ware.name, [i.name for i in game.player.inventory])
+        self.assertIn(ware.name, [i.name for i in game.current_room().shop])
 
     def test_buying_what_you_cannot_afford_changes_nothing(self):
         game = make_game()
@@ -337,12 +344,16 @@ class EconomyTests(unittest.TestCase):
         self.assertEqual([i.name for i in game.player.inventory], ["blood vial"])
 
     def test_bought_item_is_a_copy_not_the_shop_instance(self):
+        # Stock is rolled per run, so buy whatever this forge happens to have.
         game = make_game()
         game.player.location = "smithy"
-        game.player.gold = 100
-        game.buy_item("bone dagger")
+        game.player.gold = 10_000
+        ware = game.current_room().shop[0]
+
+        game.buy_item(ware.name)
+
         bought = game.player.inventory[-1]
-        stock = next(i for i in game.current_room().shop if i.name == "bone dagger")
+        stock = next(i for i in game.current_room().shop if i.name == ware.name)
         self.assertIsNot(bought, stock)
 
     def test_empty_buy_lists_the_wares(self):

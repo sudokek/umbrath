@@ -82,8 +82,8 @@ boss is standing on it, and fleeing will never carry you past one.
 
 1. **Hold** — buy weapons and armor at the charnel forge, blood at the night
    market, sleep at the inn.
-2. **Underdark** — `explore` to turn up monsters or loose coin. Deeper rooms
-   are more dangerous and pay better.
+2. **Underdark** — `explore` to turn up monsters or loose coin, and `open` any
+   chest you find. Deeper rooms are more dangerous and pay better.
 3. **Grow** — coin buys gear, kills buy levels.
 4. **Boss** — when you can take it, kill the thing in the vault. It drops a
    **relic** and opens the road on.
@@ -96,8 +96,8 @@ three lands you near level 21, which is where the Pale King becomes winnable.
 
 ### Dying
 
-When you hit zero, **the run is over**. The coin, the gear, the levels, and the
-caves themselves are gone — the next run generates a whole new world.
+When you hit zero, **the run is over**. The gear is gone, and so are the caves —
+the next run generates a whole new world.
 
 What you keep:
 
@@ -108,6 +108,22 @@ What you keep:
 - **Blessings** — spent at the **Shrine of Echoes** beneath the Greyfen inn:
   `undeath` (+8 max HP), `bloodthirst` (+2 damage), `gravewarding` (+2 defense),
   `plunder` (+50 starting coin). They stack, forever.
+- **A third of your best level**, and **a quarter of the coin on your corpse** —
+  both hard-capped at level 6 and 200 coin.
+
+That last one is deliberately bounded. The point of a head start is to skip
+re-proving Greyfen, which you have already proved; the point of the cap is that
+Ashmoor and Wintermourn — where runs actually end — stay exactly as dangerous on
+run twenty as on run two. Measured at the cap:
+
+| Hold | A capped level-6 start |
+|---|---|
+| **Greyfen** | kills a mid-tier enemy in 2 swings, dies in 10 — walkable |
+| **Ashmoor** | kills in 7, dies in 3 — still lethal |
+| **Wintermourn** | kills in 21, dies in 1 — still lethal |
+
+The coin cap covers 154% of Greyfen's best weapon, 62% of Ashmoor's, and 18% of
+Wintermourn's. It plateaus around run nine and never grows again.
 
 Your Legacy is written to your save slot whenever a run ends. `legacy` shows it.
 
@@ -133,6 +149,25 @@ and satisfying to learn. You map them by walking them. Roughly 80% of rooms have
 more than one way out, so getting lost is a "which way was it?" problem rather
 than a series of dead-end round trips. Going back through a cave is always a
 choice you make to farm loot or easier kills, never something the game forces.
+
+### Loot
+
+Every item in the game comes out of one **weighted drop table**, gated by which
+hold you have reached *and* how dangerous the room is. Deeper unlocks strictly
+more; the first hold can never drop a doom glaive.
+
+- **Loose loot** lies in rooms, scattered at generation.
+- **Chests** are rarer and worth walking for: they hold several rolls at once,
+  and the deeper they sit the more they hold. `open` one and it tips onto the
+  floor for you to `take` from. You cannot open one with something still alive
+  in the room.
+- **Valuables** — lockets, grave-silver, a crown fragment — do nothing but sell.
+  They are how a deep run turns into next run's weapon.
+
+**Forges roll their stock per run.** A charnel forge shows five pieces out of
+its hold's tier rather than the whole catalogue, so two runs shop differently —
+but it is always guaranteed to carry at least one weapon and one piece of
+armour, because a hold that cannot arm you is a hold that cannot be played.
 
 ### Wandering traders
 
@@ -229,6 +264,7 @@ explored rooms lie off-screen.
 | `feed` | `f` | Drain a badly wounded enemy. Heals you; no XP. |
 | `examine <thing>` | | Describe an item, relic, ware, or enemy. |
 | `take` / `drop <item>` | `t` | Pick up / put down an item. |
+| `open` | `o` | Force a chest and tip it onto the floor. |
 | `use <item>` | `drink` | Drink blood. Bare `drink` picks one for you. |
 | `equip <item>` | | Equip a weapon or armor. |
 | `talk` | | Speak to a wandering trader. |
