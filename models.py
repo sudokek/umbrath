@@ -30,6 +30,8 @@ class Enemy:
 
     name: str
     hp: int = 5
+    # What it recovers to when left alone. Set from ``hp`` at spawn.
+    max_hp: int = 0
     damage: int = 2
     gold: int = 0
     xp: int = 0
@@ -37,6 +39,8 @@ class Enemy:
     boss: bool = False
     # Name of the relic this enemy drops when killed (bosses only).
     relic: str = ""
+    # True while it is visibly winding up a heavy blow that lands next turn.
+    winding_up: bool = False
 
 
 @dataclass
@@ -116,6 +120,8 @@ class Player:
     bonus_attack: int = 0
     bonus_max_hp: int = 0
     bonus_defense: int = 0
+    # Set by GUARD, spent on the next blow taken.
+    guarding: bool = False
 
     def attack_power(self) -> int:
         """Damage dealt per hit (weapon or fists, plus level and relics)."""

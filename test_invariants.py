@@ -9,6 +9,8 @@ would have failed on some seed long before a player found it.
 Keep SEEDS high enough to be worth running and low enough to stay fast.
 """
 
+import pathlib
+import re
 import unittest
 
 import chargen
@@ -270,3 +272,37 @@ class SaveNameTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DocumentationTests(unittest.TestCase):
+    """The README describes the code, so it has to keep describing it.
+
+    The project layout table listed a file that had been deleted and omitted
+    the one that replaced it -- true for two commits and invisible to a suite
+    that only ran the game.
+    """
+
+    def _readme(self) -> str:
+        return (pathlib.Path(__file__).parent / "README.md").read_text(encoding="utf-8")
+
+    def _listed(self) -> set[str]:
+        return set(re.findall(r"`([a-z_]+\.py)`", self._readme()))
+
+    def test_every_module_is_described(self):
+        here = pathlib.Path(__file__).parent
+        modules = {
+            p.name
+            for p in here.glob("*.py")
+            if not p.name.startswith("test_") and p.name != "testkit.py"
+        }
+        missing = modules - self._listed()
+        self.assertFalse(missing, f"undocumented modules: {sorted(missing)}")
+
+    def test_nothing_described_has_been_deleted(self):
+        here = pathlib.Path(__file__).parent
+        ghosts = {
+            name
+            for name in self._listed()
+            if not (here / name).exists()
+        }
+        self.assertFalse(ghosts, f"README lists files that do not exist: {sorted(ghosts)}")

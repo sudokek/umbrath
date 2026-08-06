@@ -415,6 +415,7 @@ def _make_enemy(style, name, hp, damage, gold, description, **extra) -> Enemy:
     return Enemy(
         name=name,
         hp=hp,
+        max_hp=hp,
         damage=damage,
         gold=_scaled(gold, style["gold_scale"]),
         xp=_scaled(xp_value(hp, damage), style["xp_scale"]),
@@ -519,6 +520,20 @@ ENTER_ENCOUNTER_CHANCE = 0.35
 # an enemy, below the second you find coin, otherwise nothing.
 EXPLORE_ENEMY_CHANCE = 0.60
 EXPLORE_GOLD_CHANCE = 0.85
+
+# Feeding: you may drain an enemy already this badly hurt, which kills it and
+# heals you, but you get no XP for a kill you did not earn in the fight.
+FEED_THRESHOLD = 0.35
+FEED_RATE = 0.6
+
+# Guarding halves the next blow and leaves you open to strike harder after it.
+GUARD_REDUCTION = 0.5
+GUARD_RIPOSTE = 1.5
+
+# Chance an enemy telegraphs a heavy blow instead of striking normally, and
+# what that blow multiplies its damage by when it lands.
+WINDUP_CHANCE = 0.25
+WINDUP_MULTIPLIER = 2.2
 
 # Fleeing is a gamble, not a guarantee: fail and you eat a free hit.
 FLEE_SUCCESS_CHANCE = 0.70

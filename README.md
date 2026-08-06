@@ -162,9 +162,30 @@ Every hit lands within ±25% of your attack power, and one in ten is a
 **critical** that doubles it. Armor subtracts from incoming damage, but a hit
 always does at least 1.
 
-`flee` succeeds about 70% of the time and retreats you to the safest adjacent
-room *in the same hold*. Fail, and the enemy gets a free swing. Either way the
-monster stays where it is.
+A fight is four verbs, and which one is right changes turn to turn:
+
+| | |
+|---|---|
+| `attack` | Hit it. The default, and repeatable with Enter. |
+| `guard` | Brace. Halves the next blow; if nothing lands, your next swing hits 50% harder. |
+| `feed` | Drain an enemy already below 35%. Kills it and heals you for 60% of its health — **but pays no XP**. |
+| `flee` | Leave. ~70% success, and the enemy recovers fully while you are gone. |
+
+Two things stop `attack` being the answer every time:
+
+**Enemies telegraph.** A quarter of the time an ordinary enemy winds up instead
+of striking — it costs them the turn, and the blow that follows hits more than
+twice as hard. The screen shouts about it. Keep swinging and it can end you
+outright; `guard` halves it. Bosses never telegraph, because a boss does not
+need the help.
+
+**Feeding is a real cost.** Every fight ends on the same question: finish it
+with the blade for the experience, or drink it for the health. You cannot have
+both, and which you need depends on how the rest of the hold has gone.
+
+Drinking blood takes your turn too, so healing mid-fight is a decision rather
+than a free action. And `flee` heals the enemy: you cannot chip a boss down by
+running away and coming back.
 
 ### Levelling
 
@@ -204,6 +225,8 @@ explored rooms lie off-screen.
 | `explore` | `x` | Search a dangerous area for enemies or coin. |
 | `attack [enemy]` | `a` | Hit the enemy here (auto-targets; repeat with Enter). |
 | `flee` | | Try to escape the current fight. |
+| `guard` | `g` | Brace: halve the next blow, then hit harder. |
+| `feed` | `f` | Drain a badly wounded enemy. Heals you; no XP. |
 | `examine <thing>` | | Describe an item, relic, ware, or enemy. |
 | `take` / `drop <item>` | `t` | Pick up / put down an item. |
 | `use <item>` | `drink` | Drink blood. Bare `drink` picks one for you. |
@@ -244,7 +267,7 @@ settings set min_command_prefix 2     # change a number (1-10)
 | File | Role |
 |------|------|
 | `main.py` | Entry point: pick a character, then play. |
-| `newgame.py` | Title screen, save slots, character creation. |
+| `menu.py` | Main menu, save slots, character creation, Options. |
 | `chargen.py` | Origins and the point budget that keeps them equal. |
 | `game.py` | Main loop, rendering, and every command action. |
 | `models.py` | `Item`, `Enemy`, `Trader`, `Room`, `Player`, `Legacy`, `Settings`. |

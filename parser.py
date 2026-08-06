@@ -16,6 +16,8 @@ COMMANDS = {
     "equip": {"help": "Equip a weapon or armor."},
     "attack": {"help": "Attack the enemy here (repeat with Enter)."},
     "flee": {"help": "Escape combat, retreating to safety."},
+    "guard": {"help": "Brace: halve the next blow, then hit harder."},
+    "feed": {"help": "Drain a badly wounded enemy. Heals you; no XP."},
     "explore": {"help": "Search a dangerous area for enemies or loot."},
     "talk": {"help": "Speak to a wandering trader."},
     "buy": {"help": "Buy from a shop, trader, or shrine (no item = list)."},
@@ -43,6 +45,8 @@ MANUAL_ALIASES = {
     "x": "explore",
     "m": "map",
     "r": "rest",
+    "g": "guard",
+    "f": "feed",
     "h": "help",
     "q": "quit",
 }

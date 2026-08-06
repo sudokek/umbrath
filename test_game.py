@@ -9,6 +9,11 @@ from game import REST_COST
 from testkit import capture, make_game
 from models import Enemy
 
+# Enemies sometimes wind up instead of striking, which costs them the turn. Any
+# test asserting an exact HP after being hit has to pin that roll, or it is
+# asserting on a coin flip.
+STRIKES = patch("game.roll", return_value=0.99)
+
 
 class DispatchTests(unittest.TestCase):
     """The parser's vocabulary and the game's handlers must not drift apart."""
@@ -78,13 +83,13 @@ class CombatTests(unittest.TestCase):
 
     def test_enemy_strikes_back_and_armor_reduces_it(self):
         self.game.player.armor = make_item("gravemail")  # blocks 3
-        with patch("game.roll_damage", return_value=(4, False)):
+        with patch("game.roll_damage", return_value=(4, False)), STRIKES:
             self.game.attack_target("")
         self.assertEqual(self.game.player.hp, 19)  # 4 damage - 3 defense = 1
 
     def test_incoming_damage_never_drops_below_one(self):
         self.game.player.armor = make_item("gravemail")
-        with patch("game.roll_damage", return_value=(1, False)):
+        with patch("game.roll_damage", return_value=(1, False)), STRIKES:
             self.game.attack_target("")
         self.assertEqual(self.game.player.hp, 19)
 
@@ -117,7 +122,7 @@ class CombatTests(unittest.TestCase):
         self.game.player.level = 6
         runs_before = self.game.legacy.runs
 
-        with patch("game.roll_damage", return_value=(1, False)):
+        with patch("game.roll_damage", return_value=(1, False)), STRIKES:
             self.game.attack_target("")
 
         # The run is gone: fresh character, fresh world, back at the start.
@@ -131,7 +136,7 @@ class CombatTests(unittest.TestCase):
 
     def test_death_banks_echoes_for_the_next_run(self):
         self.game.player.hp = 1
-        with patch("game.roll_damage", return_value=(1, False)):
+        with patch("game.roll_damage", return_value=(1, False)), STRIKES:
             self.game.attack_target("")
         self.assertGreater(self.game.legacy.echoes, 0)
 
@@ -140,7 +145,7 @@ class CombatTests(unittest.TestCase):
         # which made walking into a monster cheaper than paying to rest.
         self.game.player.hp = 1
         self.game.player.gold = 0
-        with patch("game.roll_damage", return_value=(1, False)):
+        with patch("game.roll_damage", return_value=(1, False)), STRIKES:
             self.game.attack_target("")
         self.assertEqual(self.game.legacy.runs, 1)  # it cost you the whole run
 
@@ -462,3 +467,154 @@ class RenderTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class GuardTests(unittest.TestCase):
+    """Guarding trades a turn for a halved blow and a harder answer."""
+
+    def setUp(self):
+        self.game = make_game()
+        self.enemy = Enemy("goblin", hp=99, max_hp=99, damage=10)
+        self.game.current_room().enemies.append(self.enemy)
+
+    def test_guard_halves_the_blow_it_catches(self):
+        with patch("game.roll_damage", return_value=(10, False)), STRIKES:
+            self.game.guard()
+        # 10 damage, no armour, halved by the guard.
+        self.assertEqual(self.game.player.hp, 15)
+        self.assertIn("on your guard", self.game.message)
+
+    def test_a_guard_that_is_never_hit_pays_for_the_next_swing(self):
+        # Guard, survive, then strike out of it: the opening is still there.
+        self.game.player.guarding = True
+        with patch("game.roll_damage", side_effect=lambda power: (power, False)), STRIKES:
+            self.game.attack_target("")
+        self.assertIn("Out of your guard", self.game.message)
+        self.assertFalse(self.game.player.guarding)
+
+    def test_a_guard_is_spent_once(self):
+        with patch("game.roll_damage", return_value=(10, False)), STRIKES:
+            self.game.guard()
+        self.assertFalse(self.game.player.guarding)
+
+    def test_guarding_nothing_is_reported(self):
+        game = make_game()
+        game.guard()
+        self.assertIn("nothing here to guard", game.message)
+
+
+class WindUpTests(unittest.TestCase):
+    """Enemies telegraph, so there is a moment where the answer changes."""
+
+    def setUp(self):
+        self.game = make_game()
+        self.enemy = Enemy("ogre", hp=99, max_hp=99, damage=10)
+        self.game.current_room().enemies.append(self.enemy)
+
+    def test_a_wind_up_costs_the_enemy_its_turn(self):
+        with patch("game.roll", return_value=0.0):  # always wind up
+            message = self.game._enemy_strikes(self.enemy)
+        self.assertTrue(self.enemy.winding_up)
+        self.assertEqual(self.game.player.hp, 20)  # nothing landed
+        self.assertIn("GUARD", message)
+
+    def test_the_wind_up_lands_much_harder(self):
+        self.enemy.winding_up = True
+        with patch("game.roll_damage", side_effect=lambda power: (power, False)):
+            self.game._enemy_strikes(self.enemy)
+        self.assertLess(self.game.player.hp, 20 - 10)  # worse than a normal hit
+        self.assertFalse(self.enemy.winding_up)
+
+    def test_bosses_do_not_telegraph(self):
+        boss = Enemy("pale king", hp=99, max_hp=99, damage=10, boss=True)
+        with patch("game.roll", return_value=0.0), \
+                patch("game.roll_damage", return_value=(10, False)):
+            self.game._enemy_strikes(boss)
+        self.assertFalse(boss.winding_up)
+
+
+class FeedTests(unittest.TestCase):
+    """The one decision every fight ends on."""
+
+    def setUp(self):
+        self.game = make_game()
+        self.enemy = Enemy("rat", hp=100, max_hp=100, damage=1, gold=7, xp=40)
+        self.game.current_room().enemies.append(self.enemy)
+
+    def test_feeding_is_refused_while_it_can_still_fight(self):
+        self.game.feed()
+        self.assertIn("too strong", self.game.message)
+        self.assertIn(self.enemy, self.game.current_room().enemies)
+
+    def test_feeding_kills_and_heals_but_pays_no_xp(self):
+        self.enemy.hp = 10  # well under the threshold
+        self.game.player.hp = 5
+        self.game.feed()
+        self.assertEqual(self.game.current_room().enemies, [])
+        self.assertGreater(self.game.player.hp, 5)
+        self.assertEqual(self.game.player.xp, 0)
+        self.assertIn("not a fight", self.game.message)
+
+    def test_feeding_still_takes_the_coin(self):
+        self.enemy.hp = 10
+        gold = self.game.player.gold
+        self.game.feed()
+        self.assertEqual(self.game.player.gold, gold + 7)
+
+    def test_healing_from_a_meal_is_capped_at_full(self):
+        self.enemy.hp = 10
+        self.game.player.hp = self.game.player.max_hp
+        self.game.feed()
+        self.assertEqual(self.game.player.hp, self.game.player.max_hp)
+
+    def test_feeding_nothing_is_reported(self):
+        game = make_game()
+        game.feed()
+        self.assertIn("nothing here to feed", game.message)
+
+
+class TurnCostTests(unittest.TestCase):
+    """Actions taken in a fight give the enemy its turn."""
+
+    def test_drinking_costs_you_the_turn(self):
+        # Regression: healing resolved without the enemy ever answering, so a
+        # player with blood could never lose a fight.
+        game = make_game()
+        game.player.hp = 5
+        game.current_room().enemies.append(Enemy("goblin", hp=99, max_hp=99, damage=4))
+        with patch("game.roll_damage", return_value=(4, False)), STRIKES:
+            game.use_item("vial")
+        self.assertEqual(game.player.hp, 11)  # +10 healed, -4 struck
+
+    def test_drinking_outside_a_fight_is_free(self):
+        game = make_game()
+        game.player.hp = 5
+        game.use_item("vial")
+        self.assertEqual(game.player.hp, 15)
+
+
+class RegroupTests(unittest.TestCase):
+    """You cannot chip something down by leaving and coming back."""
+
+    def test_fleeing_lets_the_enemy_recover(self):
+        # Regression: enemy HP lived in the room and nothing restored it, so
+        # flee-return-swing beat any boss with patience and no gear.
+        game = make_game()
+        game.player.location = "cave1"
+        game.discover("cave1")
+        enemy = Enemy("troll", hp=100, max_hp=100, damage=1)
+        game.current_room().enemies.append(enemy)
+        enemy.hp = 3
+
+        with patch("game.roll", return_value=0.0):  # a clean escape
+            game.flee()
+
+        self.assertEqual(enemy.hp, 100)
+
+    def test_an_enemy_with_no_recorded_maximum_is_left_alone(self):
+        # Enemies restored from an older save have no max_hp; do not zero them.
+        game = make_game()
+        enemy = Enemy("ghost", hp=4, max_hp=0)
+        game.current_room().enemies.append(enemy)
+        game._regroup(game.current_room())
+        self.assertEqual(enemy.hp, 4)

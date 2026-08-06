@@ -23,6 +23,12 @@ import legacy as legacy_rules
 import saveload
 from content import (
     ENTER_ENCOUNTER_CHANCE,
+    FEED_RATE,
+    FEED_THRESHOLD,
+    GUARD_REDUCTION,
+    GUARD_RIPOSTE,
+    WINDUP_CHANCE,
+    WINDUP_MULTIPLIER,
     EXPLORE_ENEMY_CHANCE,
     EXPLORE_GOLD_CHANCE,
     FINAL_REGION,
@@ -40,7 +46,17 @@ from content import (
 from map_render import build_map
 from models import Item, Legacy, Room, Settings
 from parser import get_help_text, get_settings_help_text, match_target, parse_command
-from ui import bar, banner, center, clear_screen, paint, rule, set_color, set_unicode
+from ui import (
+    bar,
+    banner,
+    center,
+    clear_screen,
+    paint,
+    rule,
+    set_color,
+    set_unicode,
+    wrap,
+)
 from world import build_world
 
 DEFAULT_SAVE_PATH = "savegame.sav"
@@ -218,7 +234,7 @@ class Game:
         print()
         print(rule("-"))
         print(paint(f"== {room.name} ==", "bold", "bright_cyan"))
-        print(room.description)
+        print(wrap(room.description, indent=""))
 
         if self.settings.show_room_items and room.items:
             print("You see:", paint(", ".join(i.name for i in room.items), "green"))
@@ -242,6 +258,10 @@ class Game:
             marker = "###" if enemy.boss else "!!"
             style = ("bold", "bright_red") if enemy.boss else ("red",)
             print(paint(f"{marker} {enemy.name.upper()} -- {enemy.hp} HP {marker}", *style))
+            if enemy.winding_up:
+                print(paint("   >> IT IS WINDING UP. GUARD, DRINK, OR RUN. <<", "bold", "bright_yellow"))
+            elif self.can_feed_on(enemy):
+                print(paint("   it is failing -- you could FEED", "bright_magenta"))
 
         if self.settings.show_room_exits:
             print("Exits:", ", ".join(room.exits.keys()))
@@ -272,6 +292,18 @@ class Game:
         return "You are badly hurt, with nothing to drink. Retreat to a hold."
 
     # -- movement & encounters --------------------------------------------
+
+    def _regroup(self, room: Room) -> None:
+        """Let a room's enemies recover once the player is no longer in it.
+
+        Without this the dominant strategy against anything big is to swing
+        once, walk out, walk back, and repeat: enemy HP lived in the room and
+        nothing ever restored it, so every boss could be chipped down for free
+        by a player with patience and no gear.
+        """
+        for enemy in room.enemies:
+            if enemy.max_hp:
+                enemy.hp = enemy.max_hp
 
     def _maybe_encounter_on_enter(self) -> str | None:
         """Possibly spawn an enemy, or a trader, on entering a room."""
@@ -314,6 +346,7 @@ class Game:
         # Traders do not wait around: leave, and they have moved on.
         room.trader = None
 
+        self._regroup(room)
         self.player.location = room.exits[direction]
         self.discover(self.player.location)
         self.region_reached = max(self.region_reached, self.region())
@@ -366,9 +399,17 @@ class Game:
         enemy = room.enemies[0]
         weapon = self.player.weapon.name if self.player.weapon else "fists"
 
-        damage, critical = roll_damage(self.player.attack_power())
+        power = self.player.attack_power()
+        riposte = ""
+        if self.player.guarding:
+            # The guard was never spent, so the opening it bought is still here.
+            self.player.guarding = False
+            power = int(power * GUARD_RIPOSTE)
+            riposte = "Out of your guard, "
+
+        damage, critical = roll_damage(power)
         enemy.hp -= damage
-        opener = "A critical strike! " if critical else ""
+        opener = riposte or ("A critical strike! " if critical else "")
         lines = [
             f"{opener}You hit the {enemy.name} with your {weapon} for {damage} damage."
         ]
@@ -457,12 +498,88 @@ class Game:
             player.gold += power
 
     def _enemy_strikes(self, enemy) -> str:
-        """Apply one hit from ``enemy`` to the player and describe it."""
-        damage, critical = roll_damage(enemy.damage)
+        """Apply one hit from ``enemy`` to the player and describe it.
+
+        Three things can happen, and which one is the whole reason a fight has
+        turns in it: the enemy winds up (costing it this turn but promising a
+        heavy blow), it lands a wind-up it started, or it hits normally.
+        """
+        if enemy.winding_up:
+            enemy.winding_up = False
+            damage, critical = roll_damage(int(enemy.damage * WINDUP_MULTIPLIER))
+            opener = "The blow lands like a falling wall! "
+        elif not enemy.boss and roll() < WINDUP_CHANCE:
+            enemy.winding_up = True
+            return (
+                f"The {enemy.name} draws back for something heavy. "
+                "(GUARD, or get out of the way.)"
+            )
+        else:
+            damage, critical = roll_damage(enemy.damage)
+            opener = "A vicious blow! " if critical else ""
+
         incoming = max(1, damage - self.player.defense())
+        guarded = ""
+        if self.player.guarding:
+            self.player.guarding = False
+            incoming = max(1, int(incoming * GUARD_REDUCTION))
+            guarded = " You take it on your guard."
+
         self.player.hp -= incoming
-        opener = "A vicious blow! " if critical else ""
-        return f"{opener}The {enemy.name} strikes back for {incoming} damage."
+        return f"{opener}The {enemy.name} strikes for {incoming} damage.{guarded}"
+
+    def guard(self) -> None:
+        """Brace for the next blow, and hit harder once it has landed."""
+        room = self.current_room()
+        if not room.enemies:
+            self.say("There is nothing here to guard against.")
+            return
+
+        enemy = room.enemies[0]
+        self.player.guarding = True
+        lines = ["You set yourself, and wait."]
+        lines.append(self._enemy_strikes(enemy))
+
+        if self.player.hp <= 0:
+            self._die(enemy, lines)
+            return
+        self.say(*lines)
+
+    def can_feed_on(self, enemy) -> bool:
+        """Is this enemy weak enough to drain?"""
+        return bool(enemy.max_hp) and enemy.hp <= enemy.max_hp * FEED_THRESHOLD
+
+    def feed(self) -> None:
+        """Drain a badly wounded enemy: it dies, you heal, you gain no XP.
+
+        This is the one decision every fight ends on. Finishing a thing with the
+        blade pays experience; drinking it pays health. You cannot have both.
+        """
+        room = self.current_room()
+        if not room.enemies:
+            self.say("There is nothing here to feed on.")
+            return
+
+        enemy = room.enemies[0]
+        if not self.can_feed_on(enemy):
+            self.say(
+                f"The {enemy.name} is still too strong to hold still.",
+                f"Wear it down below {int(FEED_THRESHOLD * 100)}% first.",
+            )
+            return
+
+        healed = min(
+            int(enemy.max_hp * FEED_RATE), self.player.max_hp - self.player.hp
+        )
+        self.player.hp += healed
+        room.enemies.remove(enemy)
+        self.player.gold += enemy.gold
+
+        self.say(
+            f"You take the {enemy.name} by the throat and drink.",
+            f"It goes limp. You recover {healed} HP and take {enemy.gold} coin.",
+            "No experience -- that was a meal, not a fight.",
+        )
 
     def _die(self, enemy, lines: list[str]) -> None:
         """End the run in defeat."""
@@ -538,7 +655,9 @@ class Game:
             self.say(*lines)
             return
 
-        # The enemy is left alive and in place -- fleeing buys distance, not a win.
+        # The enemy is left alive and in place -- fleeing buys distance, not a
+        # win, and it recovers while you are gone.
+        self._regroup(room)
         self.player.location = destination
         self.discover(destination)
         self.say(
@@ -644,10 +763,22 @@ class Game:
         healed = min(item.power, self.player.max_hp - self.player.hp)
         self.player.hp += healed
         self.player.inventory.remove(item)
+
         if healed > 0:
-            self.say(f"You drink the {item.name} and recover {healed} HP.")
+            lines = [f"You drink the {item.name} and recover {healed} HP."]
         else:
-            self.say(f"You drink the {item.name}, but you are already full.")
+            lines = [f"You drink the {item.name}, but you are already full."]
+
+        # Drinking takes the turn. Without this you could out-heal anything in
+        # the game for free, and no fight could ever be lost while blood held.
+        room = self.current_room()
+        if room.enemies:
+            lines.append(self._enemy_strikes(room.enemies[0]))
+            if self.player.hp <= 0:
+                self._die(room.enemies[0], lines)
+                return
+
+        self.say(*lines)
 
     def equip_item(self, raw_target: str) -> None:
         """Equip a weapon or armor from the inventory."""
@@ -979,6 +1110,8 @@ class Game:
             "equip": self.equip_item,
             "attack": self.attack_target,
             "flee": lambda target: self.flee(),
+            "guard": lambda target: self.guard(),
+            "feed": lambda target: self.feed(),
             "explore": lambda target: self.explore(),
             "talk": self.talk,
             "buy": self.buy_item,
