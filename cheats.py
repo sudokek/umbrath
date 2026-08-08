@@ -59,19 +59,29 @@ def _destinations(game) -> dict[str, str]:
     """Every place ``tp`` can send you, derived from the world itself."""
     places: dict[str, str] = {}
 
+    def note(label: str, key: str, region: int) -> None:
+        """Register a landmark twice: numbered, and bare for the first hold.
+
+        So ``forge2`` reaches Ashmoor's and a bare ``forge`` still means the one
+        you start next to -- which stops being obvious the moment there is more
+        than one of everything.
+        """
+        places[f"{label}{region}"] = key
+        places.setdefault(label, key)
+
     for key, room in game.world.items():
         if any(enemy.boss for enemy in room.enemies):
-            places[f"boss{room.region}"] = key
+            note("boss", key, room.region)
         if room.shrine:
             places["shrine"] = key
-        if room.inn and room.region == 1:
-            places["inn"] = key
-        if room.shop and room.can_sell and room.region == 1:
-            places["market"] = key
-        if room.shop and not room.can_sell and room.region == 1:
-            places["forge"] = key
+        if room.inn:
+            note("inn", key, room.region)
+        if room.shop and room.can_sell:
+            note("market", key, room.region)
+        if room.shop and not room.can_sell:
+            note("forge", key, room.region)
         if room.key.startswith("square"):
-            places[f"town{room.region}"] = key
+            note("town", key, room.region)
         if room.key.startswith("cave"):
             places.setdefault(f"cave{room.region}", key)
 

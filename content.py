@@ -8,9 +8,10 @@ Every item is defined exactly once in ``ITEMS``; holds, cave loot, traders, and
 boss drops all hand out copies via ``make_item`` so a price or damage tweak
 lands everywhere at once.
 
-The world is three holds, each a settlement plus a themed underdark (see
+The world is a run of holds, each a settlement plus a themed underdark (see
 ``THEMES``). A theme owns its room names, flavor text, and its own bestiary, so
-the Barrow Warrens read and fight nothing like the Rimevault.
+the Barrow Warrens read and fight nothing like the Sporefall. Adding a hold is
+an entry in ``THEMES`` and an entry in ``REGIONS``; nothing else needs to know.
 
 All gameplay randomness flows through this module so a single
 ``random.seed(...)`` (see Game.__init__) makes a whole playthrough reproducible.
@@ -25,9 +26,9 @@ from models import Enemy, Item, Trader
 # Items
 # --------------------------------------------------------------------------
 
-# The one and only definition of each item. Tier 1 gear is Greyfen's, tier 2 is
-# Ashmoor's, tier 3 is Wintermourn's -- each hold outfits you for the dark
-# behind it. You are a vampire: what heals you is blood.
+# The one and only definition of each item. Each hold's tier outfits you for
+# the dark behind it, in the order the holds are travelled. You are a vampire:
+# what heals you is blood.
 ITEMS: dict[str, Item] = {
     item.name: item
     for item in [
@@ -72,7 +73,16 @@ ITEMS: dict[str, Item] = {
              kind="weapon", power=16, price=245),
         Item("cinder mail", "Fire-blacked rings. Blocks 7 damage.",
              kind="armor", power=7, price=265),
-        # -- tier 3: Wintermourn -----------------------------------------
+        # -- tier 3: Sallowmere ------------------------------------------
+        Item("fen scythe", "It harvests whatever is standing. +20 damage.",
+             kind="weapon", power=20, price=400),
+        Item("blight cleaver", "Wet, and it does not rust. +25 damage.",
+             kind="weapon", power=25, price=610),
+        Item("sporeplate", "Grown rather than forged. Blocks 10 damage.",
+             kind="armor", power=10, price=430),
+        Item("chitin harness", "Prised off something larger. Blocks 13.",
+             kind="armor", power=13, price=600),
+        # -- tier 4: Wintermourn -----------------------------------------
         Item("bloodfang", "It drinks before you do. +28 damage.",
              kind="weapon", power=28, price=700),
         Item("doom glaive", "A polearm of frozen soul-iron. +36 damage.",
@@ -96,6 +106,8 @@ ITEMS: dict[str, Item] = {
              kind="valuable", price=110),
         Item("reliquary tooth", "Not yours. Someone paid for this once.",
              kind="valuable", price=210),
+        Item("amber nodule", "Something small is still screaming inside it.",
+             kind="valuable", price=300),
         Item("frozen tear", "It has not melted, and it will not.",
              kind="valuable", price=380),
         Item("crown fragment", "A shard of something that ruled here.",
@@ -110,6 +122,11 @@ ITEMS: dict[str, Item] = {
             "ember heart",
             "Still burning, after everything. Permanently +25 max HP.",
             kind="relic", power=25, price=0, effect="max_hp",
+        ),
+        Item(
+            "spore heart",
+            "It beats, slowly, in your hand. Permanently +6 defense.",
+            kind="relic", power=6, price=0, effect="defense",
         ),
         Item(
             "pale crown",
@@ -275,6 +292,68 @@ THEMES: dict[str, dict] = {
                  "An armored shape kneeling in the fire, patient as a furnace. It "
                  "has guarded this door long enough to forget what for."),
     },
+    "mire": {
+        "cave_name": "The Sporefall",
+        "xp_scale": 0.38,
+        # Tuned down from 0.38: at that rate a full clear paid 3.2x the hold's
+        # best kit, where every other hold pays about 2x.
+        "gold_scale": 0.26,
+        "label": "S",
+        "entrance_name": "The Sallow Door",
+        "entrance_description": (
+            "Warm air comes up out of the ground, and it is breathing. The frame "
+            "of the door has been softened by something growing through it."
+        ),
+        "room_names": [
+            "Spore Hall", "The Soft Stair", "Bloomrot Gallery", "Fruiting Chamber",
+            "The Wet Nave", "Mycelial Crawl", "Cap Forest", "The Sagging Vault",
+            "Rotwood Span", "Pale Orchard", "The Breathing Floor", "Sallow Reach",
+            "Hyphal Tangle", "The Quiet Feast", "Spore Cloister", "Bloom Deep",
+        ],
+        "flavor": [
+            "Caps the size of shields lean out of the walls, faintly luminous.",
+            "The floor gives underfoot, and does not spring back.",
+            "Something has grown through a skeleton and kept its shape.",
+            "Spores drift in the lamplight like slow, patient snow.",
+            "Everything here is warm, and none of it is alive in the usual way.",
+            "White threads run through the stone like veins through a hand.",
+            "The air is thick enough to taste, and it tastes of turned bread.",
+            "A soft rain of spores answers every step you take.",
+            "The walls exhale when you press them. You stop pressing them.",
+            "Fungal light, greenish and even, comes from no direction at all.",
+            "There is no echo here. The growth swallows every sound whole.",
+            "Old timbers stand furred and swollen, holding up nothing.",
+        ],
+        "enemies": {
+            1: [
+                ("sporeling", 45, 13, 90, 150, "Small, soft, and there are more behind it."),
+                ("rot-touched", 50, 12, 95, 160, "It was a person the week before last."),
+                ("husk-walker", 55, 11, 100, 165, "Hollowed out and repurposed as a stalk."),
+            ],
+            2: [
+                ("bloom-wraith", 70, 27, 140, 220, "A cloud with intent, and a grudge."),
+                ("fungal knight", 85, 22, 150, 235, "Its armour is fruiting from the inside."),
+                ("mycelial brute", 100, 19, 160, 250, "Grown to a shape that could carry a fist."),
+            ],
+            3: [
+                ("the rotting choir", 130, 34, 240, 360, "Many mouths. One appetite."),
+                ("spore titan", 150, 28, 260, 380, "It sheds a generation with every step."),
+                ("blight colossus", 175, 25, 280, 400, "Slow, vast, and entirely full of teeth."),
+            ],
+        },
+        "loot": [(1, "heart's blood"), (2, "fen scythe"), (2, "amber nodule"),
+                 (3, "sporeplate"), (3, "heart's blood"), (4, "chitin harness"),
+                 (5, "blight cleaver")],
+        "vault_name": "The Mother Bloom",
+        "vault_description": (
+            "The cavern has been given over entirely. Every surface is the same "
+            "pale growth, and all of it leans toward the centre, where something "
+            "very old is fruiting."
+        ),
+        "boss": ("the mother bloom", 290, 44, 900, "spore heart",
+                 "It has no face to read and no limbs to watch. It simply spreads, "
+                 "and everything the Sporefall was is part of it now."),
+    },
     "rime": {
         "cave_name": "The Rimevault",
         "xp_scale": 0.30,
@@ -382,6 +461,31 @@ REGIONS = [
     {
         "index": 3,
         "approach_name": (
+            "The Sallow Track"
+        ),
+        "approach_description": (
+            "The track sinks as it goes. {town} is west, on firmer ground; east, "
+            "the reeds give way and something underneath is breathing."
+        ),
+        "road_name": (
+            "The Sinking Road"
+        ),
+        "road_description": (
+            "The road east of {previous} loses its stones a mile at a time. "
+            "{town} stands on stilts at the end of it, over water that is not "
+            "quite water."
+        ),
+        "town": "Sallowmere",
+        "theme": "mire",
+        "x": 120,
+        "rooms": 20,
+        "gear": ["slag cleaver", "fen scythe", "blight cleaver",
+                 "scale shroud", "sporeplate", "chitin harness"],
+        "potions": ["vitae flask", "heart's blood"],
+    },
+    {
+        "index": 4,
+        "approach_name": (
             "The White Pass"
         ),
         "approach_description": (
@@ -395,7 +499,7 @@ REGIONS = [
         ),
         "town": "Wintermourn",
         "theme": "rime",
-        "x": 120,
+        "x": 180,
         "rooms": 22,
         "gear": ["hoarfrost spear", "bloodfang", "widow's edge", "doom glaive",
                  "glacier harness", "abyssal plate", "carrion ward"],
@@ -477,14 +581,16 @@ def make_boss(theme: str) -> Enemy:
     )
 
 
-# How much loose coin scales by hold. Deeper holds pay more per find, but the
-# per-theme ``gold_scale`` above keeps the totals from running away.
-GOLD_BY_REGION = (1, 1, 3, 7)
+# How much loose coin scales by hold, indexed by hold number. Deeper holds pay
+# more per find, but the per-theme ``gold_scale`` above keeps totals in check.
+# Clamped to its own length so adding a hold cannot silently reuse the last
+# entry -- or read off the end.
+GOLD_BY_REGION = (1, 1, 3, 5, 7)
 
 
 def find_gold(tier: int, region: int = 1) -> int:
     """Return a random amount of loose coin found while exploring."""
-    scale = GOLD_BY_REGION[min(max(region, 1), 3)]
+    scale = GOLD_BY_REGION[min(max(region, 1), len(GOLD_BY_REGION) - 1)]
     return random.randint(3 * tier, 8 * tier) * scale
 
 
@@ -527,16 +633,25 @@ DROPS: list[tuple[str, int, int, int]] = [
     ("crypt maul",                  3,    2,    3),
 
     ("heart's blood",              22,    3,    1),
-    ("frozen tear",                16,    3,    1),
-    ("hoarfrost spear",            12,    3,    1),
-    ("ichor of ages",              14,    3,    2),
-    ("crown fragment",             10,    3,    2),
-    ("bloodfang",                   8,    3,    2),
-    ("glacier harness",             8,    3,    2),
-    ("abyssal plate",               6,    3,    3),
-    ("widow's edge",                5,    3,    3),
-    ("carrion ward",                4,    3,    3),
-    ("doom glaive",                 2,    3,    3),
+    ("amber nodule",               16,    3,    1),
+    ("fen scythe",                 12,    3,    1),
+    ("sporeplate",                 10,    3,    2),
+    ("reliquary tooth",            10,    3,    2),
+    ("heart's blood",              14,    3,    2),
+    ("chitin harness",              7,    3,    3),
+    ("blight cleaver",              5,    3,    3),
+
+    ("heart's blood",              22,    4,    1),
+    ("frozen tear",                16,    4,    1),
+    ("hoarfrost spear",            12,    4,    1),
+    ("ichor of ages",              14,    4,    2),
+    ("crown fragment",             10,    4,    2),
+    ("bloodfang",                   8,    4,    2),
+    ("glacier harness",             8,    4,    2),
+    ("abyssal plate",               6,    4,    3),
+    ("widow's edge",                5,    4,    3),
+    ("carrion ward",                4,    4,    3),
+    ("doom glaive",                 2,    4,    3),
 ]
 
 

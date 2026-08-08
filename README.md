@@ -1,7 +1,7 @@
 # Umbrath
 
 A terminal roguelike. You are a vampire lord of a fallen house, clawing a
-dominion back out of the mountains that swallowed it — three holds, three
+dominion back out of the mountains that swallowed it — four holds, four
 underdarks, and a thing on a frozen throne at the bottom of the world.
 
 Dying is not the end. It is the loop.
@@ -73,11 +73,11 @@ Three holds, travelled in order. Each is a settlement plus an underdark, and
 each underdark ends in a boss standing in the doorway to the next hold.
 
 ```
-  Greyfen ──> The Barrow Warrens ──> Ashmoor ──> The Emberdeeps ──> Wintermourn ──> The Rimevault
-   (hold)        wet stone, bone      (hold)      ash and fire        (hold)        ice and silence
-                       |                               |                                  |
-                 BARROW GAUNT                    CINDER WARDEN                       PALE KING
-                 drops a relic                   drops a relic                       you win
+  Greyfen ─> Barrow Warrens ─> Ashmoor ─> Emberdeeps ─> Sallowmere ─> Sporefall ─> Wintermourn ─> Rimevault
+   (hold)     wet stone, bone   (hold)    ash and fire    (hold)      rot and spores   (hold)      ice, silence
+                    |                          |                          |                            |
+              BARROW GAUNT              CINDER WARDEN             THE MOTHER BLOOM                 PALE KING
+              +4 damage                 +25 max HP                +6 defense                       you win
 ```
 
 Each hold sells a better tier of gear than the last and fights harder than the
@@ -97,8 +97,9 @@ boss is standing on it, and fleeing will never carry you past one.
 
 Clear a hold thoroughly — every room, every spawn, all the loot — and you come
 out at roughly the right level for its boss with about twice the coin its best
-kit costs. Enough to be ready; not enough to trivialise it. A full sweep of all
-three lands you near level 21, which is where the Pale King becomes winnable.
+kit costs. Every hold measures at 2.0–2.3×; none of them is the rich one.
+A full sweep of all four lands you near level 26, where the Pale King takes
+about seven swings to kill and four of his to kill you.
 
 ### Dying
 
@@ -147,6 +148,9 @@ its own theme — they never read alike:
   were dropped rather than laid. Grave robbers, barrow wights, hollow knights.
 - **The Emberdeeps** — black glass and slow fire, ash falling like grey snow,
   forge-marks cut by someone long gone. Ash hounds, forge revenants, magma drakes.
+- **The Sporefall** — warm, breathing, and growing. Caps the size of shields,
+  spores falling like slow snow, no echo anywhere because the growth eats sound.
+  Sporelings, fungal knights, blight colossi.
 - **The Rimevault** — blue ice and total silence, frozen waterfalls, things
   suspended in the floor. Frost wolves, hoarfrost knights, winter wyrms.
 
@@ -267,7 +271,7 @@ Once on, the screen says so and these work from anywhere:
 | | |
 |---|---|
 | `give <item\|all>` | Any item — read **live** from the registry, so it never goes stale. `give` alone lists everything. |
-| `tp <where>` | `boss1`–`boss3`, `town1`–`town3`, `shrine`, `forge`, `market`, `inn`, or any raw room key. |
+| `tp <where>` | `boss1`–`boss4`, and `town`/`forge`/`market`/`inn` either bare (first hold) or numbered (`forge3`). Plus `shrine` and any raw room key. |
 | `hp <n\|max>` / `maxhp <n>` | Set current or maximum health. |
 | `level <n>` | Jump to a level, applying every level-up on the way. |
 | `gold <n>` / `echoes <n>` | Set coin, or echoes for testing the shrine. |

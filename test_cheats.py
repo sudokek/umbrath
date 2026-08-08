@@ -117,14 +117,20 @@ class TeleportTests(unittest.TestCase):
         self.game.cheats_on = True
 
     def test_every_boss_is_reachable(self):
-        for region in (1, 2, 3):
+        from content import REGIONS
+
+        for spec in REGIONS:
+            region = spec["index"]
             self.game.handle_command(f"tp boss{region}")
             room = self.game.current_room()
-            self.assertEqual(room.region, region)
-            self.assertTrue(any(e.boss for e in room.enemies), f"boss{region}")
+            self.assertEqual(room.region, region, spec["town"])
+            self.assertTrue(any(e.boss for e in room.enemies), spec["town"])
 
     def test_landmarks_are_reachable(self):
-        for where in ("shrine", "forge", "market", "inn", "town1", "town2", "town3"):
+        from content import REGIONS
+
+        towns = [f"town{spec['index']}" for spec in REGIONS]
+        for where in ["shrine", "forge", "market", "inn", *towns]:
             self.game.handle_command(f"tp {where}")
             self.assertNotIn("Nowhere called", self.game.message, where)
 
@@ -258,3 +264,28 @@ class MenuTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LandmarkTests(unittest.TestCase):
+    """Landmarks are numbered per hold once there is more than one of each."""
+
+    def setUp(self):
+        self.game = make_game()
+        self.game.cheats_on = True
+
+    def test_each_hold_has_its_own_forge_and_market(self):
+        from content import REGIONS
+
+        for spec in REGIONS:
+            for label in ("forge", "market", "inn", "town"):
+                self.game.handle_command(f"tp {label}{spec['index']}")
+                self.assertEqual(
+                    self.game.current_room().region,
+                    spec["index"],
+                    f"{label}{spec['index']}",
+                )
+
+    def test_a_bare_landmark_still_means_the_first_hold(self):
+        for label in ("forge", "market", "inn", "town"):
+            self.game.handle_command(f"tp {label}")
+            self.assertEqual(self.game.current_room().region, 1, label)

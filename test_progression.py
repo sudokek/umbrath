@@ -508,17 +508,25 @@ class DropTableTests(unittest.TestCase):
     def test_every_drop_names_a_real_item(self):
         from content import DROPS, ITEMS
 
+        holds = {spec["index"] for spec in REGIONS}
         for name, weight, region, tier in DROPS:
             self.assertIn(name, ITEMS, name)
             self.assertGreater(weight, 0, name)
-            self.assertIn(region, (1, 2, 3), name)
+            self.assertIn(region, holds, name)
             self.assertIn(tier, (1, 2, 3), name)
+
+    def test_every_hold_has_something_to_drop(self):
+        from content import eligible_drops
+
+        for spec in REGIONS:
+            rows = eligible_drops(spec["index"], 1)
+            self.assertTrue(rows, f"{spec['town']} has an empty drop table")
 
     def test_rolling_always_returns_something_usable(self):
         from content import roll_loot
 
-        for region in (1, 2, 3):
+        for spec in REGIONS:
             for tier in (1, 2, 3):
-                item = roll_loot(region, tier)
+                item = roll_loot(spec["index"], tier)
                 self.assertTrue(item.name)
                 self.assertGreater(item.price, 0)
