@@ -17,6 +17,26 @@ Poses are frames of a turn, not of a clock. ``attack`` is drawn on the turn a
 combatant swings and ``hit`` on the turn it is wounded, so a fight animates at
 exactly the rate the player types -- no sleeps, no threads, and nothing that
 fights the one-redraw-per-command rule the renderer is built on.
+
+Five rules keep the art in the register the rest of the game is written in, all
+of them learned by drawing it the wrong way round first:
+
+* **No round eyes.** A pair of round, symmetrical ``o``s reads as cute whatever
+  body it is mounted on -- the difference between a horror and a mascot lives
+  almost entirely in the eyes. Faces here are hollows, slits and brow-shadow, or
+  simply absent.
+* **Wounds are damage, not cartoon death.** ``hit`` never draws ``x`` for eyes.
+  It shears the body with a stroke that is not in the idle frame.
+* **A blow moves things.** ``hit`` shifts the whole sprite one column *away* from
+  its opponent and ``attack`` shifts it one column *toward*, so a trade of blows
+  reads as recoil and lunge rather than two statues swapping faces.
+* **Mass over detail.** At six rows there is no room for a face worth drawing, so
+  silhouette and weight do the work: ``%`` for rot and fur and hide, ``#`` for
+  plate and stone, ``|`` for ribs and gills.
+* **Every row of one creature shares a centre.** Six lines drawn by eye come out
+  a column apart and the result looks broken rather than drawn -- the jaw sits
+  off the skull, the shoulders off the hips. This is the failure no test catches,
+  because every line is still the right length.
 """
 
 from ui import glyph, paint
@@ -39,33 +59,34 @@ def _art(block: str) -> list[str]:
 
 
 # --------------------------------------------------------------------------
-# The player: a vampire lord, facing right, toward whatever is in the way.
+# The player: a cloaked lord, facing right, toward whatever is in the way.
+# The hood holds a shadow where a face would be; on the swing it opens.
 # --------------------------------------------------------------------------
 
 PLAYER = {
     "idle": _art(r"""
-     .---.
-    / o o \
-    \  -  /
-   /\_| |_/\
-  /  |   |  \
-     /   \
+        ,-.
+      ,/%%%\.
+     //  _  \\
+     '|%%%%%|'
+      |%|  |%|
+      _/   \_
 """),
     "attack": _art(r"""
-     .---.
-    / O O \___
-    \  ^  /   \
-   /\_| |_/\   }
-  /  |   |  \
-     /   \
+         ,-.
+       ,/%%%\.
+      //  \/  \\__
+      '|%%%%%|'  \====
+       |%|  |%|
+       _/   \_
 """),
     "hit": _art(r"""
-     .---.
-    / x o \
-    \  ~  /
-   /\_| |_/\
-   \ |   | /
-     /   \
+       ,-.
+     ,/%% \.
+    //  \  \\
+    '|%%/ %|'
+     |%|  |%|
+     \_   _/
 """),
 }
 
@@ -77,371 +98,373 @@ PLAYER = {
 SPRITES: dict[str, dict[str, list[str]]] = {
     "vermin": {
         "idle": _art(r"""
-       ,--.
-    ,-'    `.
-   (  o   o  )
-    `--.__.--'
-      ''  ''
+         ___
+      ,-'%%%'-.
+    <%%%%%%%%%%%\,
+     `-''-----''-'
+        "     "
 """),
         "attack": _art(r"""
-       ,--.
-  <,-'      `.
- <(   o   o   )
-    `--vvvv--'
-      ''  ''
+        ___
+     ,-'%%%'-.
+ <<<%%%%%%%%%%%\,
+    `-''-----''-'
+       "     "
 """),
         "hit": _art(r"""
-       ,--.
-    ,-'    `.
-   (  x   x  )
-     `-.__.-'
-       `  `
+          ___
+       ,-'%% '-.
+     <%%%/%%%%%%\,
+      `-''-----''-'
+         "     "
 """),
     },
     "flier": {
         "idle": _art(r"""
-    \        /
-   \ \      / /
-    \_\(oo)/_/
-       `--'
+    \\        //
+     \\__,__//
+       )%%%(
+        `"`
 """),
         "attack": _art(r"""
-  \_          _/
-    \_\(OO)/_/
-  <<<  `\/'
-       /  \
+  \\_         _//
+   \\__,__,__//
+  <<  )%%%(
+      /`\
 """),
         "hit": _art(r"""
-     \      /
-      \(xx)/
-       `--'
-        ||
+     \\        //
+      \\__,__//
+        )%/(
+         `
 """),
     },
     "mortal": {
         "idle": _art(r"""
-       ,---.
-      ( o o )
-     __\ - /__
-    /   | |   \
-        | |
-       _/ \_
+         ,--.
+        /^^^^\
+       _\____/_
+      /  |%%%|  \
+         |% %|
+        _/   \_
 """),
         "attack": _art(r"""
-  \    ,---.
-   \__( o o )
-     __\ ^ /__
-    /   | |   \
-        | |
-       _/ \_
+        ,--.
+   ____/^^^^\
+ <_____\____/_
+     /  |%%%|  \
+        |% %|
+       _/   \_
 """),
         "hit": _art(r"""
-       ,---.
-      ( x o )
-     __\ ~ /__
-    /   | |   \
-       /   \
-      _/   \_
+          ,--.
+         /^^ \
+        _\_/__/_
+       /  |%/%|  \
+          |% %|
+         \_   _/
 """),
     },
     "undead": {
         "idle": _art(r"""
-       .-'-.
-      ( o o )
-       \ ~ /
-      /|] [|\
-       | | |
-      _/   \_
+       .--------.
+       /\_/  \_/\
+       \   __   /
+       /|]####[|\
+        || |  ||
+       _//    \\_
 """),
         "attack": _art(r"""
-  \\   .-'-.
-   \\_( O O )
-       \ V /
-      /|] [|\
-       | | |
-      _/   \_
+  \\   .--------.
+   \\  /\_/  \_/\
+      \  VVV   /
+      /|]####[|\
+       || |  ||
+      _//    \\_
 """),
         "hit": _art(r"""
-       .-'-.
-      ( x x )
-       \ _ /
-      /|] [|\
-      /  |  \
-     _/     \_
+        .--------.
+        /\_/  \_ /
+        \  _/_   /
+        /|]#/##[|\
+        /|  ||  |\
+        _//    \\_
 """),
     },
     "beast": {
         "idle": _art(r"""
-     /\__/\
-    ( o  o )___
-     >  ..    _\
-    (  ____  )
-     || || ||
+     /\_/\
+    /  -  \_____
+   < \^^^/ %%%%%\
+     \_______%%%/
+      ||  ||  ||
 """),
         "attack": _art(r"""
-    /\__/\
-   ( O  O )____
-  <  VVVV     _\
-   (  ____   )
-    || || ||
+    /\_/\
+   /  =  \_____
+<<<VVVVVV %%%%%\
+    \_______%%%%/
+     ||  ||  ||
 """),
         "hit": _art(r"""
-     /\__/\
-    ( x  x )___
-     >  __    _\
-    (  ____  )
-     |'  '| |
+      /\_/\
+     /  \  \_____
+    < \_/ %/%%%%%\
+      \____%%%%%%/
+       |'  |'  ||
 """),
     },
     "brute": {
         "idle": _art(r"""
-      .-------.
-     ( o     o )
-      \   _   /
-    ___|;;;;;|___
-   /   |     |   \
-       |_| |_|
+       .%%%%%%%.
+      %%%\   /%%%
+      %%%%%^%%%%%
+     %%%%%%%%%%%%%
+      %%%%   %%%%
+       '''   '''
 """),
         "attack": _art(r"""
-  \   .-------.
-   \_( O     O )
-      \  ###  /
-    ___|;;;;;|___
-   /   |     |   \
-       |_| |_|
+ __   .%%%%%%%.
+(%%\ %%%\   /%%%
+ \%%%%%%%%V%%%%%
+    %%%%%%%%%%%%%
+     %%%%   %%%%
+      '''   '''
 """),
         "hit": _art(r"""
-      .-------.
-     ( x     x )
-      \   ~   /
-    ___|;;;;;|___
-   /  /|     |\  \
-      |_| |_|
+        .%%%%%%%.
+       %%%\   /%%%
+       %%%%/ %%%%%
+      %%%%%/%%%%%%%
+       %%%/   %%%%
+        '''   '''
 """),
     },
     "armored": {
         "idle": _art(r"""
-      .-=====-.
-     [  o | o  ]
-      \  ===  /
-     [|#######|]
-      |# | | #|
-     _|_|   |_|_
+       .=======.
+      [|-------|]
+       \#######/
+      [|#|###|#|]
+       |#| | |#|
+      _|_|   |_|_
 """),
         "attack": _art(r"""
- \=\  .-=====-.
-  \=\[  O | O  ]
-      \  ===  /
-     [|#######|]
-      |# | | #|
+      .=======.
+ /=/ [|-------|]
+/=/   \#######/
+     [|#|###|#|]
+      |#| | |#|
      _|_|   |_|_
 """),
         "hit": _art(r"""
-      .-=/ /=-.
-     [  x | x  ]
-      \  ===  /
-     [|##/ /#|]
-      |# | | #|
-     _|_|   |_|_
+        .==/ /==.
+       [|--/ ---|]
+        \##/ ###/
+       [|#|/##|#|]
+        |#| | |#|
+       _|_|   |_|_
 """),
     },
     "spirit": {
         "idle": _art(r"""
-       .~~~~.
-     ,'  ..  `.
-    (   (oo)   )
-     `. `--' ,'
-       ~~~~~~
-        ' '
+        ,~~~~~,
+       /       \
+      (   ___   )
+       \  ~~~  /
+        ~~ ~ ~~
+          ~ ~
 """),
         "attack": _art(r"""
-  ~~~~ .~~~~.
- ~~~ ,'  ..  `.
-  ~~(   (OO)   )
-     `. \\//' ,'
-       ~~~~~~
+  ~~   ,~~~~~,
+ ~~~  /       \
+  ~~ (   \_/   )
+      \  ~~~  /
+     ~~~ ~ ~ ~~~
 """),
         "hit": _art(r"""
-       . ~~ .
-      '  ..  `
-      (  xx  )
-       `.__,'
-         ~~
+         ,~~ ~~,
+        /   _   \
+       (  ~   ~  )
+        \  ~ ~  /
+         ~  ~  ~
 """),
     },
     "arachnid": {
         "idle": _art(r"""
-   \  \    /  /
-    \__\__/__/
-    /(o o  o)\
-   /  \____/  \
-  /    |  |    \
+   \  \       /  /
+    \__\_____/__/
+    /%%%%%%%%%%%\
+   /  \%%%%%%%/  \
+   |   |     |   |
 """),
         "attack": _art(r"""
-  \\ \  \  /  /
-   \\_\__\/__/
-  <<</(O O  O)\
-    /  \VVV/  \
-   /    |  |   \
+  \  \      /  /
+   \__\____/__/
+VV /%%%%%%%%%%\
+VV/  \%%%%%%/  \
+  |   |    |   |
 """),
         "hit": _art(r"""
-    \       /
-     \__ __/
-     /(x x)\
-    /  \__/ \
-     |      |
+    \ \       / /
+     \_\_____/_/
+     /%%/%%%%%%\
+    /  \%%%%%/  \
+    |   |    |  |
 """),
     },
     "drake": {
         "idle": _art(r"""
-       ___
-     /`. .'\__
-    ( (o o)   `\
-     \  VV  ____/
-     /_/  \_\
+        ______
+      /'------'\_
+   <( -   %%%%%%%\
+      \VV  %%%%%%/
+       /_/   \_\
 """),
         "attack": _art(r"""
-  ~~~~   ___
- ~~~~  /`. .'\__
- ~~~  ( (O O)   `\
-       \ WWW  ____/
-       /_/  \_\
+       ______
+     /'------'\_
+~~<( =   %%%%%%%\
+    /WW  %%%%%%/
+      /_/   \_\
 """),
         "hit": _art(r"""
-       ___
-     /`. .'\__
-    ( (x x)   `\
-     \  __  ____/
-     /_/  \_\
+         ______
+       /'--- -'\_
+    <( \   %%/%%%\
+       \/   %%%%%/
+        /_/   \_\
 """),
     },
     "fungal": {
         "idle": _art(r"""
-     .-~~~~~-.
-   .'  o   o  `.
-  (   .-----.   )
-   `-'  | |  `-'
-        | |
-       _|_|_
+        .-~~~-.
+      .'|||||||'.
+     ( ||||||||| )
+      `-._____.-'
+          | |
+         _|_|_
 """),
         "attack": _art(r"""
-    ..-~~~~~-..
-  .' ' o   o ' `.
- (  ' .-----. '  )
-  `-'   |||   `-'
-    .   | |   .
-       _|_|_
+   .  . .-~~~-. .  .
+   .  .'|||||||'. .
+     ( ||||||||| )
+   '  `-._____.-'  '
+      .   | |   .
+         _|_|_
 """),
         "hit": _art(r"""
-     .-~~ ~~-.
-   .'  x   x  `.
-  (   .-- --.   )
-   `-'  | |  `-'
-       /   \
-      _|   |_
+         .-~~ -.
+       .'|||| |'.
+      ( ||/||||| )
+       `-.__ __.-'
+           | |
+          _|_|_
 """),
     },
     # ---- bosses, each its own thing -------------------------------------
     "gaunt": {
         "idle": _art(r"""
-     _________
-   /\  O   O  /\
-  /  \/\/\/\/\/ \
-  \  /\/\/\/\/\ /
-   \/_________\/
+         ,-----,
+       /|\_/ \_/|\
+       \|  ===  |/
+        |#|||||#|
+        |#|   |#|
+       _|'|   |'|_
 """),
         "attack": _art(r"""
-    ___________
-  /\ \/ O   O \/ /\
- /  \/\/\/\/\/\/  \
- \  /\/\/\/\/\/\  /
-  \/___________\/
-    V V V V V
+  \\    ,-----,
+   \\ /|\_/ \_/|\
+      \|  VVV  |/
+       |#|||||#|
+       |#|   |#|
+      _|'|   |'|_
 """),
         "hit": _art(r"""
-     _________
-   /\  x   x  /\
-  /  \_/\_/\_/ \
-  \  /~\/~\/~\ /
-   \/_________\/
+          ,-----,
+        /|\_/ \_ |\
+        \| =/=   |/
+         |#||/||#|
+         |#|   |#|
+        _|'|   |'|_
 """),
     },
     "warden": {
         "idle": _art(r"""
-     /\=======/\
-    [  (*) (*)  ]
-     \  #####  /
-    [|#/|###|\#|]
-     |#| | | |#|
-    _|_|_   _|_|_
+       /\=====/\
+      [|--- ---|]
+       \##^^^##/
+      [|#/|#|\#|]
+       |#| | |#|
+      _|_|_ _|_|_
 """),
         "attack": _art(r"""
- ###  /\=====/\
-  ## [  (*) (*) ]
- ###  \  WWWW  /
-     [|#/|##|\#|]
-      |#| || |#|
-     _|_|_  _|_|_
+  ^^  /\=====/\
+ ^^^ [|--- ---|]
+  ^^  \##WWW##/
+     [|#/|#|\#|]
+      |#| | |#|
+     _|_|_ _|_|_
 """),
         "hit": _art(r"""
-     /\==/ /==/\
-    [  x   x    ]
-     \  #/ /#  /
-    [|#/|# #|\#|]
-     |#| | | |#|
-    _|_|_   _|_|_
+        /\=/ /=/\
+       [|-- / --|]
+        \##^/^##/
+       [|#/|#|\#|]
+        |#| | |#|
+       _|_|_ _|_|_
 """),
     },
     "bloom": {
         "idle": _art(r"""
-   .-~~~~~~~~~-.
- .'  o   o   o  `.
-(  .-~-. .-~-.    )
- `-'   |_|   `--~'
-   .   | |   .
-  _|___|_|___|_
+     .-~~~~~~~~~-.
+   .'||||||||||||'.
+  ( ||| .-~-. ||| )
+   `-.__|   |__.-'
+     .   |   |   .
+    _|___|___|___|_
 """),
         "attack": _art(r"""
- ..-~~~~~~~~~-..
-.' ' O   O   O '`.
-(  '.-~-. .-~-.' )
- `-' ' |_| ' `--~'
-  . .  | |  . .
- _|___ |_| ___|_
+ .   .-~~~~~~~~~-.  .
+ . .'||||||||||||'. .
+  ( ||| .-~-. ||| )
+ ' `-.__|   |__.-' '
+     .   |   |   .
+    _|___|___|___|_
 """),
         "hit": _art(r"""
-   .-~~ ~~~ ~~-.
- .'  x   x   x  `.
-(  .-~-. .- -.    )
- `-'   |_|   `--~'
-    /  | |  \
-  _|__ |_| __|_
+      .-~~~~ ~~~~-.
+    .'|||||| |||||'.
+   ( ||| ./ -. ||| )
+    `-.__| /  |_.-'
+      .   |   |   .
+     _|___|___|___|_
 """),
     },
     "king": {
         "idle": _art(r"""
-   \|/ /\ \|/
-    .--------.
-   (  *    *  )
-    \  ____  /
-   /|________|\
-   ||   ||   ||
+       \|/ /^\ \|/
+       .---------.
+       /|\_/ \_/|\
+       \|  ===  |/
+     /|#|#######|#|\
+     _|_|#|   |#|_|_
 """),
         "attack": _art(r"""
-  \\|/ /\ \|//
- ** .--------. **
- ** (  *   *  ) **
-     \  WWW  /
-    /|_______|\
-    ||  ||  ||
+  \\   \|/ /^\ \|/
+   \\  .---------.
+      /|\_/ \_/|\
+      \|  VVV  |/
+    /|#|#######|#|\
+    _|_|#|   |#|_|_
 """),
         "hit": _art(r"""
-   \|/ /\ \|/
-    .--------.
-   (  x    x  )
-    \  ____  /
-   /|__/ /___|\
-   ||   ||   ||
+        \|/ / \ \|/
+        .---------.
+        /|\_/ \_ |\
+        \|  =/=  |/
+      /|#|###/###|#|\
+      _|_|#|   |#|_|_
 """),
     },
 }
@@ -499,7 +522,9 @@ BY_KEYWORD = (
     ("colossus", "brute"),
 )
 
-# What a creature is drawn in, by archetype.
+# What a creature is drawn in, by archetype. The common bestiary stays at the
+# muted end of the palette -- stone, bone, old blood -- so that the four bosses
+# are the only things on screen lit brightly.
 TINTS = {
     "vermin": "stone",
     "flier": "stone",
@@ -507,11 +532,11 @@ TINTS = {
     "undead": "bone",
     "beast": "stone",
     "brute": "green",
-    "armored": "bright_cyan",
-    "spirit": "bright_magenta",
-    "arachnid": "magenta",
-    "drake": "bright_red",
-    "fungal": "bright_green",
+    "armored": "cyan",
+    "spirit": "magenta",
+    "arachnid": "stone",
+    "drake": "red",
+    "fungal": "green",
     "gaunt": "blood",
     "warden": "bright_red",
     "bloom": "bright_green",
@@ -544,7 +569,7 @@ def for_player(pose: str = "idle", tint: bool = True) -> list[str]:
     art = PLAYER.get(pose) or PLAYER["idle"]
     if not tint:
         return list(art)
-    return [paint(line, "bright_red") for line in art]
+    return [paint(line, "blood") for line in art]
 
 
 def meter(value: int, maximum: int, width: int = 14) -> str:

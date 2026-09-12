@@ -22,21 +22,23 @@ fight, then whatever just happened.
 
 ```
 ┌── ALARIC VANE  Mourncaller ────────────────────────────────────────────────┐
-│ HP ███████████····· 41/60    Lv 9    XP ████····                           │
+│ HP ███████████····· 41/60    Lv 9    XP ██······                           │
 │ ATK 19  grave sword                                                        │
 │ DEF 3   gravemail                                                          │
-│ coin 340   blood 3   echoes 0   relics 0   hold 1/4                        │
+│ coin 340   blood 4   echoes 0   relics 0   hold 1/4                        │
 ├── Mouth of the Warrens ────────────────────────────────────────────────────┤
-│ A collapsed barrow-door, propped open by roots as thick as a man's arm.     │
-│ exits west, north                                                          │
+│ A collapsed barrow-door, propped open by roots as thick as a man's arm.    │
+│ Wet air breathes out of it. EXPLORE to hunt, or press deeper.              │
+│ exits west, east, north, south                                             │
 ├── CRYPT OGRE ──────────────────────────────────────────────────────────────┤
-│             .---.                        .-------.                         │
-│            / O O \___                   ( x     x )                        │
-│            \  ^  /   \                   \   ~   /                         │
-│           /\_| |_/\   }                ___|;;;;;|___                       │
-│          /  |   |  \                  /  /|     |\  \                      │
-│             /   \                        |_| |_|                           │
-│             ██████████···· 41/60      ███████······· 9/18                  │
+│                    ,-.                            .%%%%%%%.                │
+│                  ,/%%%\.                         %%%\   /%%%               │
+│                 //  \/  \\__                     %%%%/ %%%%%               │
+│                 '|%%%%%|'  \====                %%%%%/%%%%%%%              │
+│                  |%|  |%|                        %%%/   %%%%               │
+│                  _/   \_                          '''   '''                │
+│             ██████████···· 41/60          ███████······· 9/18              │
+│                                                                            │
 ├────────────────────────────────────────────────────────────────────────────┤
 │ You hit the crypt ogre with your grave sword for 13 damage.                │
 └────────────────────────────────────────────────────────────────────────────┘
@@ -273,6 +275,24 @@ will watch it land.
 The art is **hand-drawn for this game** — nothing copied, so the project's
 provenance stays clean — and it is pure ASCII, which is what lets it survive a
 console that cannot encode box-drawing.
+
+It is also drawn to rules, because the first draft of it was funny by accident:
+
+- **No round eyes.** A pair of symmetrical `o`s reads as *cute* on any body you
+  mount it on, and that single habit turned a barrow full of rot into a puppet
+  show. Faces here are hollows, slits and brow-shadow, or absent.
+- **A wound is damage, not cartoon death.** No `x` for eyes. A `hit` frame shears
+  the body with a stroke the idle frame does not have.
+- **A blow moves things.** `hit` shifts the whole sprite one column *away* from
+  its opponent and `attack` one column *toward* it, so trading blows reads as
+  recoil and lunge instead of two statues swapping faces.
+- **Mass over detail.** Six rows is no room for a face worth drawing, so weight
+  and silhouette do the work: `%` for rot and hide, `#` for plate and stone, `|`
+  for ribs and gills.
+
+The last three are asserted by tests — including a check that measures each
+frame's leading edge, since redrawing a pose and forgetting to shift it makes a
+fight look frozen while breaking nothing else.
 
 Sprites are keyed by **archetype**, not by creature. Forty creatures × three
 poses would be a hundred and twenty thin drawings; instead fifteen archetypes

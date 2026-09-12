@@ -100,6 +100,60 @@ class GeometryTests(unittest.TestCase):
                 self.assertLessEqual(visible_len(line), INNER, name)
 
 
+class MotionTests(unittest.TestCase):
+    """A pose has to read as movement, not as a different face on a statue.
+
+    Enemies face left, toward the player, so a wounded one is drawn further
+    right than its idle frame and a swinging one further left. The player faces
+    right, so both are mirrored. Redrawing a pose and forgetting to shift it is
+    easy, invisible to every other test here, and makes a fight look frozen.
+    """
+
+    @staticmethod
+    def _left_edge(art: list[str]) -> int:
+        inked = [len(line) - len(line.lstrip()) for line in art if line.strip()]
+        return min(inked, default=0)
+
+    def _check(self, name: str, poses: dict[str, list[str]], toward: int) -> None:
+        """``toward`` is the direction the opponent lies in: -1 left, +1 right."""
+        idle = self._left_edge(poses["idle"])
+        lunge = self._left_edge(poses["attack"])
+        recoil = self._left_edge(poses["hit"])
+        self.assertGreater(
+            (lunge - idle) * toward, 0, f"{name}: attack does not move toward its foe"
+        )
+        self.assertLess(
+            (recoil - idle) * toward, 0, f"{name}: hit does not recoil away"
+        )
+
+    def test_every_enemy_lunges_left_and_recoils_right(self):
+        for kind, poses in sprites.SPRITES.items():
+            self._check(kind, poses, toward=-1)
+
+    def test_the_player_lunges_right_and_recoils_left(self):
+        self._check("player", sprites.PLAYER, toward=+1)
+
+    def test_no_pose_is_a_copy_of_another(self):
+        # Three names for one drawing would animate to nothing at all.
+        for kind, poses in [("player", sprites.PLAYER), *sprites.SPRITES.items()]:
+            frames = {tuple(art) for art in poses.values()}
+            self.assertEqual(len(frames), len(sprites.POSES), f"{kind} repeats a frame")
+
+    def test_a_wound_marks_the_body_and_not_the_eyes(self):
+        # `x` for eyes is the cartoon-death convention, and it is the single
+        # thing that made the first draft of this art read as comedy.
+        for kind, poses in [("player", sprites.PLAYER), *sprites.SPRITES.items()]:
+            drawing = "".join(poses["hit"])
+            self.assertNotIn("x", drawing.lower(), f"{kind} dies like a cartoon")
+
+    def test_nothing_has_round_eyes(self):
+        for kind, poses in [("player", sprites.PLAYER), *sprites.SPRITES.items()]:
+            for pose, art in poses.items():
+                for line in art:
+                    for pair in ("o o", "0 0", "O O", "oo", "OO"):
+                        self.assertNotIn(pair, line, f"{kind}/{pose}: {line!r}")
+
+
 class PoseTests(unittest.TestCase):
     """Poses are frames of a turn, set by what happened and cleared by the draw."""
 
