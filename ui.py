@@ -20,7 +20,10 @@ import os
 import re
 import sys
 
-WIDTH = 62
+WIDTH = 78
+
+# Room inside the vertical borders: "| " + content + " |".
+INNER = WIDTH - 4
 
 # Matches an ANSI escape, so text can be measured by what a reader actually
 # sees rather than by how many bytes it takes to say it.
@@ -300,7 +303,13 @@ def frame_divider(title: str = "", style: str = "stone") -> str:
 
 
 def _edge(left: str, right: str, title: str, style: str) -> str:
-    """One horizontal edge of a panel, with an optional inset title."""
+    """One horizontal edge of a panel, with an optional inset title.
+
+    The title is measured with :func:`visible_len` and printed as given. Both
+    matter: counting its colour escapes as characters made every titled edge
+    short by the length of the escapes, and re-styling it here overrode whatever
+    the caller had already painted it.
+    """
     horizontal = glyph("h")
     plain = paint(left + horizontal * (WIDTH - 2) + right, style)
 
@@ -308,16 +317,68 @@ def _edge(left: str, right: str, title: str, style: str) -> str:
         return plain
 
     label = f" {title} "
-    room = WIDTH - 2 - len(label)
+    room = WIDTH - 2 - visible_len(label)
     if room < 2:
         return plain
 
     lead = 2
     return (
         paint(left + horizontal * lead, style)
-        + paint(label, "bone", "bold")
+        + label
         + paint(horizontal * (room - lead) + right, style)
     )
+
+
+def row(text: str = "", style: str = "stone") -> str:
+    """One content line of a panel, with its vertical borders.
+
+    Padding is measured with :func:`visible_len`, so a coloured line ends up
+    exactly as wide as a plain one and the right border stays in the last
+    column whatever styling the caller used.
+    """
+    side = paint(glyph("v"), style)
+    body = text + " " * max(0, INNER - visible_len(text))
+    return f"{side} {body} {side}"
+
+
+def blank(style: str = "stone") -> str:
+    """An empty panel line, borders included."""
+    return row("", style)
+
+
+def middle(text: str, width: int) -> str:
+    """Centre one piece of text inside a column, ignoring colour escapes."""
+    padding = max(0, width - visible_len(text))
+    left = padding // 2
+    return " " * left + text + " " * (padding - left)
+
+
+def side_by_side(left: list[str], right: list[str], gap: int = 3) -> list[str]:
+    """Set two blocks next to each other, padded to a shared height.
+
+    Used for the duel panel, where the player stands on the left and whatever is
+    trying to kill them stands on the right.
+    """
+    width = max((visible_len(line) for line in left), default=0)
+    height = max(len(left), len(right))
+    out = []
+    for index in range(height):
+        a = left[index] if index < len(left) else ""
+        b = right[index] if index < len(right) else ""
+        out.append(a + " " * max(0, width - visible_len(a) + gap) + b)
+    return out
+
+
+def block(lines: list[str], width: int) -> list[str]:
+    """Centre a whole block as one unit, so its rows keep their alignment.
+
+    Centring each line on its own visible length shifts them against each other
+    -- which turns a map grid into confetti. The block is squared off first and
+    then moved once.
+    """
+    inner = max((visible_len(line) for line in lines), default=0)
+    pad = " " * max(0, (width - inner) // 2)
+    return [pad + line + " " * max(0, inner - visible_len(line)) for line in lines]
 
 
 def center(text: str) -> str:
@@ -349,12 +410,17 @@ def fit(text: str, width: int) -> str:
     return clipped.rstrip() + ELLIPSIS
 
 
-def wrap(text: str, indent: str = "  ") -> str:
+def wrap(text: str, indent: str = "  ", width: int = 0) -> str:
     """Fold prose to the interface width so it can never break a frame.
+
+    Defaults to :data:`INNER` rather than :data:`WIDTH`, because prose almost
+    always ends up inside a panel and a panel only has INNER columns to give it.
+    Folding to the full width overflowed the border by exactly one column.
 
     Plain text only -- wrapping would count colour escapes as characters, so
     paint the result rather than the input.
     """
+    limit = width or INNER
     words = text.split()
     if not words:
         return indent
@@ -362,7 +428,7 @@ def wrap(text: str, indent: str = "  ") -> str:
     lines, current = [], indent
     for word in words:
         candidate = word if current.strip() == "" else f"{current} {word}"
-        if len(candidate) > WIDTH and current.strip():
+        if len(candidate) > limit and current.strip():
             lines.append(current)
             current = f"{indent}{word}"
         else:

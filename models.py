@@ -200,6 +200,7 @@ class Settings:
     auto_clear: bool = True
     color: bool = True
     line_drawing: bool = True
+    show_sprites: bool = True
     show_room_items: bool = True
     show_room_exits: bool = True
     show_move_message: bool = True

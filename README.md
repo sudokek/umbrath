@@ -16,13 +16,43 @@ is no dependency to vendor, pin, or download.
 
 ### How it looks
 
+The whole screen is one drawn box, 78 columns wide, redrawn once per command:
+a HUD, the room, then either the map or — when something is in the way — the
+fight, then whatever just happened.
+
+```
+┌── ALARIC VANE  Mourncaller ────────────────────────────────────────────────┐
+│ HP ███████████····· 41/60    Lv 9    XP ████····                           │
+│ ATK 19  grave sword                                                        │
+│ DEF 3   gravemail                                                          │
+│ coin 340   blood 3   echoes 0   relics 0   hold 1/4                        │
+├── Mouth of the Warrens ────────────────────────────────────────────────────┤
+│ A collapsed barrow-door, propped open by roots as thick as a man's arm.     │
+│ exits west, north                                                          │
+├── CRYPT OGRE ──────────────────────────────────────────────────────────────┤
+│             .---.                        .-------.                         │
+│            / O O \___                   ( x     x )                        │
+│            \  ^  /   \                   \   ~   /                         │
+│           /\_| |_/\   }                ___|;;;;;|___                       │
+│          /  |   |  \                  /  /|     |\  \                      │
+│             /   \                        |_| |_|                           │
+│             ██████████···· 41/60      ███████······· 9/18                  │
+├────────────────────────────────────────────────────────────────────────────┤
+│ You hit the crypt ogre with your grave sword for 13 damage.                │
+└────────────────────────────────────────────────────────────────────────────┘
+```
+
 - **24-bit colour** where the terminal advertises it (Windows Terminal, most
   modern Unix terminals), falling back to the 16 basic colours, and to no colour
   at all where escapes are unsupported or `NO_COLOR` is set.
 - **Box-drawing characters** for the frame and the map's corridors, falling back
   to `-` and `|` automatically when the console's encoding cannot carry them.
-- The health bar runs green → amber → red as you get hurt; bosses shout in
-  bright red.
+- Health meters run green → amber → red as they empty; bosses shout in bright
+  red.
+
+Every line is measured with `visible_len`, which ignores colour escapes, so the
+right-hand border lands in column 78 whatever styling is switched on — asserted
+by a test that draws every creature in every pose and checks the width.
 
 Both are detected at startup and can be forced either way from **Options**
 (`color`, `line_drawing`). Layout is measured ignoring colour escapes, so the
@@ -232,6 +262,31 @@ Drinking blood takes your turn too, so healing mid-fight is a decision rather
 than a free action. And `flee` heals the enemy: you cannot chip a boss down by
 running away and coming back.
 
+### Sprites
+
+Every creature has a body, and three frames of it: **idle**, **hit** for the turn
+it is wounded, and **attack** for the turn it swings. So a fight animates at
+exactly the rate you type — no timers, no sleeps, and nothing fighting the
+one-redraw-per-command rule the renderer is built on. Ignore a wind-up and you
+will watch it land.
+
+The art is **hand-drawn for this game** — nothing copied, so the project's
+provenance stays clean — and it is pure ASCII, which is what lets it survive a
+console that cannot encode box-drawing.
+
+Sprites are keyed by **archetype**, not by creature. Forty creatures × three
+poses would be a hundred and twenty thin drawings; instead fifteen archetypes
+carry the art and every creature resolves to one — vermin, fliers, mortals,
+undead, beasts, brutes, armoured things, spirits, arachnids, drakes, fungal
+growths, and a unique body for each of the four bosses. Resolution is by explicit
+entry where a name does not give it away and by keyword otherwise, so a monster
+added tomorrow gets a body today without being registered twice. Tests assert
+that every creature resolves, every archetype is reachable, and no boss shares a
+body with a common enemy.
+
+Turn them off with `settings toggle show_sprites`, and the map comes back during
+fights.
+
 ### Levelling
 
 Killing something awards XP based on how tough it was. Level `N` costs `20 × N`
@@ -356,6 +411,7 @@ settings set min_command_prefix 2     # change a number (1-10)
 | `parser.py` | Turns typed text into commands. |
 | `cheats.py` | The debug console (see below). |
 | `saveload.py` | Saves, the Legacy file, scrambling, version tolerance. |
+| `sprites.py` | Hand-drawn ASCII portraits and their archetypes. |
 | `ui.py` | Terminal helpers and the big ASCII banners. |
 | `testkit.py` | Shared test scaffolding (not collected: unittest globs `test*.py`). |
 | `test_*.py` | Unit tests, including `test_invariants.py`. |

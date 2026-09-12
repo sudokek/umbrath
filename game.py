@@ -44,18 +44,29 @@ from content import (
     roll_damage,
     spawn_enemy,
 )
-from map_render import build_map
+import chargen
+import sprites
+from map_render import build_grid, build_map
 from models import Item, Legacy, Room, Settings
 from parser import get_help_text, get_settings_help_text, match_target, parse_command
 from ui import (
-    bar,
+    INNER,
+    block,
     banner,
+    blank,
     center,
     clear_screen,
+    fit,
+    frame_bottom,
+    frame_divider,
+    frame_top,
+    middle,
     paint,
+    row,
     rule,
     set_color,
     set_unicode,
+    side_by_side,
     wrap,
 )
 from world import build_world
@@ -105,6 +116,8 @@ class Game:
         # Set when a run ends: a full screen the loop shows, and pauses on,
         # before play resumes. Empty at every other moment.
         self.interlude: list[str] = []
+        # Which sprite frame each combatant is drawn in, for one turn only.
+        self.poses = {"player": "idle", "enemy": "idle"}
         self.last_command = ""
         self.commands = self._build_commands()
         self.start_run()
@@ -220,91 +233,181 @@ class Game:
     # -- rendering ---------------------------------------------------------
 
     def render(self) -> None:
-        """Clear the screen and redraw the whole interface."""
+        """Draw the whole interface: one framed screen, once per command.
+
+        Four panels stacked inside a single border -- the HUD, the room, then
+        either the map or the duel, then the message. Every line goes through
+        :func:`ui.row`, which measures with ``visible_len``, so the right-hand
+        border lands in the same column whatever colour is switched on.
+        """
         if self.settings.auto_clear:
             clear_screen()
 
-        room = self.current_room()
+        for line in self._hud_panel():
+            print(line)
+        for line in self._room_panel():
+            print(line)
+        for line in self._view_panel():
+            print(line)
+        for line in self._message_panel():
+            print(line)
+
+        # The poses were a frame of this turn, not a standing state.
+        self.poses = {"player": "idle", "enemy": "idle"}
+
+    def _hud_panel(self) -> list[str]:
+        """Name, health, gear, and purse."""
         player = self.player
         weapon = player.weapon.name if player.weapon else "fists"
         armor = player.armor.name if player.armor else "none"
-
-        print(rule("="))
-        print(center(
-            f"{paint(player.name, 'bold')}   Lv {player.level}   "
-            f"{bar('HP', player.hp, player.max_hp)} {player.hp}/{player.max_hp}   "
-            f"Gold {paint(str(player.gold), 'yellow')}"
-        ))
-        print(center(
-            f"Weapon: {weapon} (ATK {player.attack_power()})   "
-            f"Armor: {armor} (DEF {player.defense()})   "
-            f"XP {player.xp}/{player.xp_to_next()}"
-        ))
+        origin = chargen.get(self.legacy.origin).name
         vials = len(self.blood())
-        print(center(
-            f"Hold {room.region}/{FINAL_REGION}   "
-            f"Blood {paint(str(vials), 'bright_red' if vials else 'dim')}   "
-            f"Echoes {self.legacy.echoes}   Relics {len(player.relics)}"
+
+        title = paint(player.name.upper(), "bold", "bright_red")
+        lines = [frame_top(f"{title}  {paint(origin, 'dim')}")]
+
+        lines.append(row(
+            f"{paint('HP', 'dim')} {sprites.meter(player.hp, player.max_hp, 16)} "
+            f"{player.hp}/{player.max_hp}"
+            f"    {paint('Lv', 'dim')} {paint(str(player.level), 'bold')}"
+            f"    {paint('XP', 'dim')} "
+            f"{sprites.meter(player.xp, player.xp_to_next(), 8)}"
+        ))
+        lines.append(row(
+            f"{paint('ATK', 'dim')} {player.attack_power():<4}"
+            f"{paint(weapon, 'bone')}"
+        ))
+        lines.append(row(
+            f"{paint('DEF', 'dim')} {player.defense():<4}"
+            f"{paint(armor, 'bone')}"
+        ))
+        lines.append(row(
+            f"{paint('coin', 'dim')} {paint(str(player.gold), 'yellow')}"
+            f"   {paint('blood', 'dim')} "
+            f"{paint(str(vials), 'bright_red' if vials else 'dim')}"
+            f"   {paint('echoes', 'dim')} {self.legacy.echoes}"
+            f"   {paint('relics', 'dim')} {len(player.relics)}"
+            f"   {paint(f'hold {self.region()}/{FINAL_REGION}', 'dim')}"
         ))
         if self.cheats_on:
-            print(center(paint(
-                f"cheats on -- type CHEATS for the list, {cheats.WORD} to stop",
+            lines.append(row(paint(
+                f"cheats on -- CHEATS for the list, {cheats.WORD} to stop",
                 "bright_magenta",
             )))
-        print(rule("="))
+        return lines
 
-        if self.settings.show_map:
-            print()
-            for line in build_map(self.world, self.discovered, player.location):
-                print(line)
+    def _room_panel(self) -> list[str]:
+        """Where you are, what is lying about, and the ways out."""
+        room = self.current_room()
+        lines = [frame_divider(paint(room.name, "bold", "bright_cyan"))]
 
-        print()
-        print(rule("-"))
-        print(paint(f"== {room.name} ==", "bold", "bright_cyan"))
-        print(wrap(room.description, indent=""))
+        for line in wrap(room.description, indent="").splitlines():
+            lines.append(row(line))
 
         if self.settings.show_room_items and room.items:
-            print("You see:", paint(", ".join(i.name for i in room.items), "green"))
+            lines.append(row(
+                f"{paint('loot', 'dim')}  "
+                + paint(fit(", ".join(i.name for i in room.items), INNER - 8), "green")
+            ))
 
         if room.chest and not room.chest.opened:
-            print(paint(f"A {room.chest.name} sits here, shut. (OPEN it.)", "bright_yellow"))
+            lines.append(row(paint(
+                f"a {room.chest.name} sits here, shut -- OPEN it", "bright_yellow"
+            )))
 
         if room.shrine:
-            print("Blessings:", ", ".join(
-                f"{i.name} ({i.price} echoes)" for i in make_shrine_stock()
+            lines.append(row(
+                f"{paint('shrine', 'dim')}  "
+                + fit(", ".join(f"{i.name} ({i.price}e)"
+                                for i in make_shrine_stock()), INNER - 10)
             ))
         elif room.shop:
-            print("For sale:", ", ".join(f"{i.name} ({i.price}g)" for i in room.shop))
+            lines.append(row(
+                f"{paint('sale', 'dim')}  "
+                + fit(", ".join(f"{i.name} {i.price}g"
+                                for i in room.shop), INNER - 8)
+            ))
 
         if room.trader:
-            print(paint(f"* {room.trader.name} is here, packs open. "
-                        "(TALK, or BUY/SELL)", "bright_magenta"))
+            lines.append(row(paint(
+                f"{room.trader.name} is here, packs open -- TALK, BUY, SELL",
+                "bright_magenta",
+            )))
 
         if room.inn:
-            print(f"Rest here to fully heal for {REST_COST} gold.")
-
-        if room.enemies:
-            enemy = room.enemies[0]
-            marker = "###" if enemy.boss else "!!"
-            style = ("bold", "bright_red") if enemy.boss else ("red",)
-            print(paint(f"{marker} {enemy.name.upper()} -- {enemy.hp} HP {marker}", *style))
-            if enemy.winding_up:
-                print(paint("   >> IT IS WINDING UP. GUARD, DRINK, OR RUN. <<", "bold", "bright_yellow"))
-            elif self.can_feed_on(enemy):
-                print(paint("   it is failing -- you could FEED", "bright_magenta"))
-
-        if self.settings.show_room_exits:
-            print("Exits:", ", ".join(room.exits.keys()))
+            lines.append(row(paint(
+                f"a bed and a fire -- REST for {REST_COST} coin", "dim"
+            )))
 
         hint = self._hint()
         if hint:
-            print(paint(hint, "bright_yellow"))
+            lines.append(row(paint(hint, "bright_yellow")))
 
-        print(rule("-"))
+        if self.settings.show_room_exits:
+            lines.append(row(
+                f"{paint('exits', 'dim')} "
+                + paint(", ".join(room.exits.keys()), "bright_cyan")
+            ))
+        return lines
 
+    def _view_panel(self) -> list[str]:
+        """The map, or -- when something is in the way -- the fight."""
+        room = self.current_room()
+        if room.enemies and self.settings.show_sprites:
+            return self._duel_panel(room.enemies[0])
+        if not self.settings.show_map:
+            return []
+        grid = build_grid(self.world, self.discovered, self.player.location)
+        return [frame_divider(paint("the map", "dim"))] + [
+            row(line) for line in block(grid, INNER)
+        ]
+
+    def _duel_panel(self, enemy) -> list[str]:
+        """The player and whatever is trying to kill them, facing each other."""
+        style = ("bold", "bright_red") if enemy.boss else ("bright_red",)
+        lines = [frame_divider(paint(enemy.name.upper(), *style))]
+
+        mine = sprites.for_player(self.poses.get("player", "idle"))
+        theirs = sprites.for_enemy(enemy.name, self.poses.get("enemy", "idle"))
+
+        for line in block(side_by_side(mine, theirs, gap=10), INNER):
+            lines.append(row(line))
+
+        top = enemy.max_hp or enemy.hp
+        bars = (
+            f"{sprites.meter(self.player.hp, self.player.max_hp, 14)}"
+            f" {self.player.hp}/{self.player.max_hp}"
+            + " " * 10
+            + f"{sprites.meter(enemy.hp, top, 14)} {enemy.hp}/{top}"
+        )
+        lines.append(row(middle(bars, INNER)))
+
+        if enemy.winding_up:
+            lines.append(row(middle(paint(
+                ">> WINDING UP -- GUARD, DRINK, OR RUN <<",
+                "bold", "bright_yellow",
+            ), INNER)))
+        elif self.can_feed_on(enemy):
+            lines.append(row(middle(paint(
+                "it is failing -- you could FEED", "bright_magenta"
+            ), INNER)))
+        else:
+            lines.append(blank())
+        return lines
+
+    def _message_panel(self) -> list[str]:
+        """Whatever just happened, and the bottom of the frame."""
+        lines = [frame_divider()]
         if self.message:
-            print(self.message)
+            for line in self.message.splitlines():
+                wrapped = wrap(line, indent="").splitlines() or [""]
+                for piece in wrapped:
+                    lines.append(row(piece))
             self.message = ""
+        else:
+            lines.append(blank())
+        lines.append(frame_bottom())
+        return lines
 
     def _hint(self) -> str | None:
         """A nudge when the player is in trouble and has an answer to hand.
@@ -316,10 +419,10 @@ class Game:
         if player.hp > player.max_hp * 0.4:
             return None
         if self.blood():
-            return "You are badly hurt. Type DRINK to open a vial."
+            return "you are badly hurt -- DRINK to open a vial"
         if self.current_room().shop:
-            return "You are badly hurt, and out of blood. BUY some."
-        return "You are badly hurt, with nothing to drink. Retreat to a hold."
+            return "you are badly hurt and out of blood -- BUY some"
+        return "you are badly hurt, with nothing to drink -- retreat to a hold"
 
     # -- movement & encounters --------------------------------------------
 
@@ -427,6 +530,7 @@ class Game:
             return
 
         enemy = room.enemies[0]
+        self.poses = {"player": "attack", "enemy": "hit"}
         weapon = self.player.weapon.name if self.player.weapon else "fists"
 
         power = self.player.attack_power()
@@ -546,10 +650,13 @@ class Game:
         """
         if enemy.winding_up:
             enemy.winding_up = False
+            self.poses["enemy"] = "attack"
+            self.poses["player"] = "hit"
             damage, critical = roll_damage(int(enemy.damage * WINDUP_MULTIPLIER))
             opener = "The blow lands like a falling wall! "
         elif not enemy.boss and roll() < WINDUP_CHANCE:
             enemy.winding_up = True
+            self.poses["enemy"] = "attack"
             return (
                 f"The {enemy.name} draws back for something heavy. "
                 "(GUARD, or get out of the way.)"
@@ -580,6 +687,7 @@ class Game:
 
         enemy = room.enemies[0]
         self.player.guarding = True
+        self.poses = {"player": "hit", "enemy": "attack"}
         lines = ["You set yourself, and wait."]
         lines.append(self._enemy_strikes(enemy))
 
@@ -611,6 +719,7 @@ class Game:
             )
             return
 
+        self.poses = {"player": "attack", "enemy": "hit"}
         healed = min(
             int(enemy.max_hp * FEED_RATE), self.player.max_hp - self.player.hp
         )

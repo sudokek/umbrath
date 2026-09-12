@@ -316,7 +316,8 @@ class DrinkingTests(unittest.TestCase):
         self.assertIn("BUY", game._hint())  # hurt, broke, standing in a shop
 
         game.player.location = "square"
-        self.assertIn("Retreat", game._hint())  # hurt, nothing, nowhere
+        # Content, not capitalisation -- the UI restyles these freely.
+        self.assertIn("retreat", game._hint().lower())
 
 
 class EconomyTests(unittest.TestCase):
@@ -453,10 +454,32 @@ class RenderTests(unittest.TestCase):
         game = make_game()
         game.say("hello there")
         text = self._draw(game)
-        self.assertIn("Greyfen Square", text)
-        self.assertIn("HP [", text)  # the ASCII meter
-        self.assertIn("Lv 1", text)
-        self.assertIn("hello there", text)
+        self.assertIn("Greyfen Square", text)   # the room panel's title
+        self.assertIn("HP", text)               # the HUD's health meter
+        self.assertIn("ATK", text)
+        self.assertIn("hello there", text)      # the message panel
+
+    def test_every_line_is_exactly_the_interface_width(self):
+        # The whole screen is one framed box now, so a single mis-measured line
+        # puts the right-hand border in the wrong column for that row only --
+        # visible, but easy to miss by eye.
+        from ui import WIDTH, visible_len
+
+        game = make_game()
+        game.say("a message long enough to need the panel it sits in")
+        for line in self._draw(game).splitlines():
+            if line.strip():
+                self.assertEqual(visible_len(line), WIDTH, repr(line))
+
+    def test_a_fight_replaces_the_map_with_the_duel(self):
+        game = make_game()
+        game.player.location = "cave1"
+        game.current_room().enemies.append(
+            Enemy("barrow wight", hp=12, max_hp=12, damage=4)
+        )
+        text = self._draw(game)
+        self.assertIn("BARROW WIGHT", text)
+        self.assertNotIn("the map", text)
 
     def test_message_is_cleared_after_being_shown(self):
         game = make_game()

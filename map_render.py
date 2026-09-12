@@ -43,6 +43,23 @@ def _visible_keys(world: dict[str, Room], discovered: set[str]) -> set[str]:
     return keys
 
 
+def build_grid(
+    world: dict[str, Room],
+    discovered: set[str],
+    current: str,
+) -> list[str]:
+    """Just the drawn grid, for sitting inside a panel.
+
+    Always exactly ``GRID_HEIGHT`` rows, so the panel around it never changes
+    height as the player walks. The captions ``build_map`` adds live outside the
+    panel, in its title and in the room header.
+    """
+    lines = build_map(world, discovered, current)[:GRID_HEIGHT]
+    while len(lines) < GRID_HEIGHT:
+        lines.append("")
+    return lines
+
+
 def build_map(
     world: dict[str, Room],
     discovered: set[str],
